@@ -12,6 +12,10 @@ import io
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.api_keys import GEMINI_API_KEY, GEMINI_MODEL, UPLOAD_FOLDER, RESULT_FOLDER, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 
+# V2阶段：导入批量任务相关模块
+from task_manager import task_manager, TaskStatus
+from tasks import process_batch_task
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 CORS(app)  # 启用CORS支持
@@ -138,7 +142,9 @@ def generate_image():
             }), 500
             
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        error_msg = str(e)
+        app.logger.error(f"Generate image error: {error_msg}")
+        return jsonify({'success': False, 'error': f'生成失败: {error_msg}'}), 500
 
 @app.route('/static/uploads/<filename>')
 def uploaded_file(filename):
@@ -154,6 +160,168 @@ def result_file(filename):
 def health_check():
     """健康检查接口"""
     return jsonify({'status': 'healthy', 'message': 'BatchGen Pro MVP is running'})
+
+# ==================== V2阶段：批量生成API ====================
+
+@app.route('/api/batch/generate', methods=['POST'])
+def create_batch_task():
+    """创建批量生成任务"""
+    try:
+        # 检查是否有文件
+        if 'files' not in request.files:
+            return jsonify({'error': 'No files provided'}), 400
+        
+        files = request.files.getlist('files')
+        prompt = request.form.get('prompt', '')
+        
+        if not files or all(file.filename == '' for file in files):
+            return jsonify({'error': 'No files selected'}), 400
+        
+        if not prompt.strip():
+            return jsonify({'error': 'Prompt is required'}), 400
+        
+        # 验证文件
+        valid_files = []
+        for file in files:
+            if file and file.filename and allowed_file(file.filename):
+                valid_files.append(file)
+        
+        if not valid_files:
+            return jsonify({'error': 'No valid files provided'}), 400
+        
+        # 准备图片数据
+        images_data = []
+        for file in valid_files:
+            filename = secure_filename(file.filename)
+            file_id = str(uuid.uuid4())
+            new_filename = f"{file_id}_{filename}"
+            
+            # 保存文件
+            file_path = os.path.join(UPLOAD_FOLDER, new_filename)
+            file.save(file_path)
+            
+            # 读取文件数据
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+            
+            images_data.append({
+                'filename': filename,
+                'file_data': file_data,
+                'file_path': file_path
+            })
+        
+        # 创建批量任务
+        task_id, task_data = task_manager.create_task(images_data, prompt)
+        
+        # 更新任务状态为处理中
+        task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
+        
+        # 暂时使用同步处理，避免Celery复杂性
+        try:
+            # 直接调用处理函数
+            from tasks import process_batch_task_sync
+            result = process_batch_task_sync(task_id, images_data, prompt)
+            
+            if result['success']:
+                task_manager.update_task_status(task_id, TaskStatus.COMPLETED)
+            else:
+                task_manager.update_task_status(task_id, TaskStatus.FAILED)
+        except Exception as e:
+            app.logger.error(f"Batch processing error: {str(e)}")
+            task_manager.update_task_status(task_id, TaskStatus.FAILED)
+        
+        return jsonify({
+            'success': True,
+            'task_id': task_id,
+            'message': f'批量任务已创建，共{len(images_data)}张图片',
+            'task_data': task_data
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Create batch task error: {str(e)}")
+        return jsonify({'success': False, 'error': f'创建任务失败: {str(e)}'}), 500
+
+@app.route('/api/batch/tasks', methods=['GET'])
+def get_batch_tasks():
+    """获取所有批量任务列表"""
+    try:
+        tasks = task_manager.get_all_tasks()
+        return jsonify({
+            'success': True,
+            'tasks': tasks
+        })
+    except Exception as e:
+        app.logger.error(f"Get batch tasks error: {str(e)}")
+        return jsonify({'success': False, 'error': f'获取任务列表失败: {str(e)}'}), 500
+
+@app.route('/api/batch/tasks/<task_id>', methods=['GET'])
+def get_batch_task(task_id):
+    """获取特定任务详情"""
+    try:
+        task_data = task_manager.get_task(task_id)
+        if task_data:
+            return jsonify({
+                'success': True,
+                'task': task_data
+            })
+        else:
+            return jsonify({'success': False, 'error': '任务不存在'}), 404
+    except Exception as e:
+        app.logger.error(f"Get batch task error: {str(e)}")
+        return jsonify({'success': False, 'error': f'获取任务详情失败: {str(e)}'}), 500
+
+@app.route('/api/batch/tasks/<task_id>/status', methods=['GET'])
+def get_batch_task_status(task_id):
+    """获取任务状态"""
+    try:
+        task_data = task_manager.get_task(task_id)
+        if task_data:
+            return jsonify({
+                'success': True,
+                'status': task_data['status'],
+                'progress': task_data['progress'],
+                'processed_images': task_data['processed_images'],
+                'total_images': task_data['total_images']
+            })
+        else:
+            return jsonify({'success': False, 'error': '任务不存在'}), 404
+    except Exception as e:
+        app.logger.error(f"Get batch task status error: {str(e)}")
+        return jsonify({'success': False, 'error': f'获取任务状态失败: {str(e)}'}), 500
+
+@app.route('/api/batch/tasks/<task_id>', methods=['DELETE'])
+def cancel_batch_task(task_id):
+    """取消任务"""
+    try:
+        task_data = task_manager.cancel_task(task_id)
+        if task_data:
+            return jsonify({
+                'success': True,
+                'message': '任务已取消',
+                'task': task_data
+            })
+        else:
+            return jsonify({'success': False, 'error': '任务不存在'}), 404
+    except Exception as e:
+        app.logger.error(f"Cancel batch task error: {str(e)}")
+        return jsonify({'success': False, 'error': f'取消任务失败: {str(e)}'}), 500
+
+@app.route('/api/batch/tasks/<task_id>/results', methods=['GET'])
+def get_batch_task_results(task_id):
+    """获取任务结果"""
+    try:
+        task_data = task_manager.get_task(task_id)
+        if task_data:
+            return jsonify({
+                'success': True,
+                'results': task_data['results'],
+                'images': task_data['images']
+            })
+        else:
+            return jsonify({'success': False, 'error': '任务不存在'}), 404
+    except Exception as e:
+        app.logger.error(f"Get batch task results error: {str(e)}")
+        return jsonify({'success': False, 'error': f'获取任务结果失败: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
