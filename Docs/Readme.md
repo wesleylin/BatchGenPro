@@ -128,7 +128,11 @@ BatchGen-Pro/
 
 #### **9. Docker部署**
 
-**本地Docker部署**：
+**环境要求**：
+- Docker 20.10+
+- Docker Compose 2.0+
+
+**快速部署**：
 
 1. **克隆项目**：
    ```bash
@@ -152,23 +156,13 @@ BatchGen-Pro/
    - 前端：http://localhost
    - 健康检查：http://localhost/health
 
-**服务器部署**：
-
-1. **一键部署到服务器**：
-   ```bash
-   ./deploy-server.sh deploy
-   ```
-
-2. **访问地址**：
-   - 前端：https://img.qingmood.xyz
-   - 健康检查：https://img.qingmood.xyz/health
-
 **部署命令**：
-- `./deploy.sh deploy prod` - 本地生产环境部署
-- `./deploy-server.sh deploy` - 服务器部署
-- `./deploy-server.sh update` - 更新服务器服务
-- `./deploy-server.sh status` - 检查服务器状态
-- `./deploy-server.sh logs` - 查看服务器日志
+- `./deploy.sh deploy prod` - 生产环境部署
+- `./deploy.sh deploy dev` - 开发环境部署
+- `./deploy.sh logs` - 查看日志
+- `./deploy.sh status` - 检查服务状态
+- `./deploy.sh stop` - 停止服务
+- `./deploy.sh cleanup` - 清理环境
 
 #### **10. 本地开发**
 
