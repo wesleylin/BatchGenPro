@@ -22,7 +22,7 @@ class BatchTaskManager:
         self.redis_client = redis_client
         self.task_prefix = "batch_task:"
     
-    def create_task(self, images_data, prompt):
+    def create_task(self, images_data, prompt, api_type="gemini"):
         """创建批量任务"""
         task_id = str(uuid.uuid4())
         
@@ -37,6 +37,7 @@ class BatchTaskManager:
             "failed_images": 0,
             "progress": 0.0,
             "prompt": prompt,
+            "api_type": api_type,
             "images": [],
             "results": {
                 "success_count": 0,
@@ -123,11 +124,11 @@ class BatchTaskManager:
                 if image["filename"] == image_filename:
                     if result["success"]:
                         image["status"] = TaskStatus.COMPLETED.value
-                        image["result_url"] = result.get("generated_url")
+                        image["result_url"] = result.get("generated_image_url")
                         task_data["results"]["success_count"] += 1
                         task_data["results"]["generated_images"].append({
                             "filename": image_filename,
-                            "generated_url": result.get("generated_url"),
+                            "generated_url": result.get("generated_image_url"),
                             "generated_filename": result.get("generated_filename")
                         })
                     else:

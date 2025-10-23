@@ -10,7 +10,8 @@ import io
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.api_keys import GEMINI_API_KEY, GEMINI_MODEL, UPLOAD_FOLDER, RESULT_FOLDER, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from config.api_keys import GEMINI_API_KEY, GEMINI_MODEL, UPLOAD_FOLDER, RESULT_FOLDER, SUPPORTED_APIS, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from ai_image_generator import create_image_generator
 
 # V2阶段：导入批量任务相关模块
 from task_manager import task_manager, TaskStatus
@@ -173,12 +174,16 @@ def create_batch_task():
         
         files = request.files.getlist('files')
         prompt = request.form.get('prompt', '')
+        api_type = request.form.get('api_type', 'gemini')
         
         if not files or all(file.filename == '' for file in files):
             return jsonify({'error': 'No files selected'}), 400
         
         if not prompt.strip():
             return jsonify({'error': 'Prompt is required'}), 400
+        
+        if api_type not in SUPPORTED_APIS:
+            return jsonify({'error': f'Unsupported API type: {api_type}'}), 400
         
         # 验证文件
         valid_files = []
@@ -211,7 +216,7 @@ def create_batch_task():
             })
         
         # 创建批量任务
-        task_id, task_data = task_manager.create_task(images_data, prompt)
+        task_id, task_data = task_manager.create_task(images_data, prompt, api_type)
         
         # 更新任务状态为处理中
         task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
@@ -220,7 +225,7 @@ def create_batch_task():
         try:
             # 直接调用处理函数
             from tasks import process_batch_task_sync
-            result = process_batch_task_sync(task_id, images_data, prompt)
+            result = process_batch_task_sync(task_id, images_data, prompt, api_type)
             
             if result['success']:
                 task_manager.update_task_status(task_id, TaskStatus.COMPLETED)
@@ -324,4 +329,12 @@ def get_batch_task_results(task_id):
         return jsonify({'success': False, 'error': f'获取任务结果失败: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    # 检查是否为Docker环境
+    is_docker = os.path.exists('/.dockerenv')
+    debug_mode = os.getenv('FLASK_ENV') != 'production'
+    
+    app.run(
+        debug=debug_mode, 
+        host='0.0.0.0', 
+        port=int(os.getenv('PORT', 5001))
+    )

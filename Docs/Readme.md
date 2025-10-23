@@ -6,7 +6,7 @@
 
 创建一个内部Web应用，使团队成员能批量生成图片。用户上传多张基准图片和一段通用Prompt，系统在后台调用生图API，并实时展示结果。
 
-#### **2. 开发计划（MVP优先）**
+#### **2. 开发计划（已完成）**
 
 **MVP阶段（✅ 已完成）**：
 - ✅ 单张图片生成流程验证
@@ -16,14 +16,23 @@
 - ✅ 图片上传和生成功能
 - ✅ 前端图片显示和下载
 
-**V2阶段（待开发）**：
-- 多张图片批量生成
-- Celery异步任务队列
-- 实时状态更新
+**V2阶段（✅ 已完成）**：
+- ✅ 多张图片批量生成
+- ✅ 异步任务队列（Redis + 同步处理）
+- ✅ 实时状态更新
+- ✅ 任务管理和进度显示
 
-**V3阶段（待开发）**：
-- 多API支持（豆包API）
-- UI优化和高级功能
+**V3阶段（✅ 已完成）**：
+- ✅ 多API支持（Gemini + 豆包API）
+- ✅ UI优化和用户体验提升
+- ✅ API选择器
+- ✅ 任务管理界面优化
+
+**Docker化阶段（✅ 已完成）**：
+- ✅ Docker容器化部署
+- ✅ Docker Compose编排
+- ✅ Nginx反向代理
+- ✅ 生产环境配置
 
 #### **3. MVP核心用户流程**
 
@@ -117,26 +126,62 @@ BatchGen-Pro/
     └── Readme.md
 ```
 
-#### **9. 快速开始**
+#### **9. Docker部署**
+
+**环境要求**：
+- Docker 20.10+
+- Docker Compose 2.0+
+
+**快速部署**：
+
+1. **克隆项目**：
+   ```bash
+   git clone <repository-url>
+   cd BatchGen\ Pro
+   ```
+
+2. **配置环境变量**：
+   ```bash
+   cp env.example .env
+   # 编辑 .env 文件，配置API密钥等
+   ```
+
+3. **一键部署**：
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh deploy prod
+   ```
+
+4. **访问应用**：
+   - 前端：http://localhost
+   - 健康检查：http://localhost/health
+
+**部署命令**：
+- `./deploy.sh deploy prod` - 生产环境部署
+- `./deploy.sh deploy dev` - 开发环境部署
+- `./deploy.sh logs` - 查看日志
+- `./deploy.sh status` - 检查服务状态
+- `./deploy.sh stop` - 停止服务
+- `./deploy.sh cleanup` - 清理环境
+
+#### **10. 本地开发**
 
 **环境要求**：
 - Python 3.12+
-- Node.js 16+
-- Gemini API Key
+- Node.js 18+
+- Redis (可选，用于任务队列)
 
 **启动步骤**：
 
-1. **后端启动**：
+1. **启动后端**：
    ```bash
    cd backend
-   python -m venv .venv312
-   source .venv312/bin/activate  # macOS/Linux
-   # .venv312\Scripts\activate  # Windows
+   source .venv312/bin/activate  # 激活虚拟环境
    pip install -r requirements.txt
    python app.py
    ```
 
-2. **前端启动**：
+2. **启动前端**：
    ```bash
    cd frontend
    npm install

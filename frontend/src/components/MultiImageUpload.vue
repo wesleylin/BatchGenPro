@@ -61,6 +61,7 @@
 <script>
 import { ref, watch } from 'vue'
 import { Upload } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
 export default {
   name: 'MultiImageUpload',

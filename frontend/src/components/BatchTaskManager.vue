@@ -1,138 +1,110 @@
 <template>
   <div class="batch-task-manager">
     <div class="task-header">
-      <h3>批量任务管理</h3>
-      <el-button @click="refreshTasks" type="primary" size="small">
+      <h3>当前任务</h3>
+      <el-button @click="refreshTasks" type="primary" size="small" :icon="Refresh">
         刷新
       </el-button>
     </div>
     
-    <!-- 任务列表 -->
-    <div v-if="tasks.length > 0" class="tasks-list">
-      <el-card 
-        v-for="task in tasks" 
-        :key="task.task_id" 
-        class="task-card"
-        :class="getTaskStatusClass(task.status)"
-      >
+    <!-- 当前任务显示 -->
+    <div v-if="currentTask" class="current-task">
+      <el-card class="task-card" :class="getTaskStatusClass(currentTask.status)">
         <template #header>
           <div class="task-header-info">
-            <span class="task-id">任务ID: {{ task.task_id.substring(0, 8) }}...</span>
-            <el-tag :type="getStatusTagType(task.status)">
-              {{ getStatusText(task.status) }}
+            <span class="task-id">任务ID: {{ currentTask.task_id.substring(0, 8) }}...</span>
+            <el-tag :type="getStatusTagType(currentTask.status)">
+              {{ getStatusText(currentTask.status) }}
             </el-tag>
+            <span v-if="currentTask.api_type" class="api-type">
+              使用: {{ currentTask.api_type === 'gemini' ? 'Gemini API' : '豆包 API' }}
+            </span>
           </div>
         </template>
         
         <div class="task-content">
           <div class="task-info">
-            <p><strong>Prompt:</strong> {{ task.prompt }}</p>
-            <p><strong>创建时间:</strong> {{ formatTime(task.created_at) }}</p>
-            <p><strong>图片数量:</strong> {{ task.total_images }}</p>
+            <p><strong>Prompt:</strong> {{ currentTask.prompt }}</p>
+            <p><strong>创建时间:</strong> {{ formatTime(currentTask.created_at) }}</p>
+            <p><strong>图片数量:</strong> {{ currentTask.total_images }}</p>
           </div>
           
           <!-- 进度条 -->
-          <div v-if="task.status === 'processing'" class="progress-section">
+          <div v-if="currentTask.status === 'processing'" class="progress-section">
             <el-progress 
-              :percentage="Math.round(task.progress)" 
-              :status="task.status === 'completed' ? 'success' : ''"
+              :percentage="Math.round(currentTask.progress)" 
+              :status="currentTask.status === 'completed' ? 'success' : ''"
             />
             <p class="progress-text">
-              已处理: {{ task.processed_images }}/{{ task.total_images }}
+              已处理: {{ currentTask.processed_images }}/{{ currentTask.total_images }}
             </p>
           </div>
           
           <!-- 结果统计 -->
-          <div v-if="task.status === 'completed'" class="results-summary">
-            <el-tag type="success">成功: {{ task.results.success_count }}</el-tag>
-            <el-tag v-if="task.results.failed_count > 0" type="danger">
-              失败: {{ task.results.failed_count }}
+          <div v-if="currentTask.status === 'completed'" class="results-summary">
+            <el-tag type="success">成功: {{ currentTask.results.success_count }}</el-tag>
+            <el-tag v-if="currentTask.results.failed_count > 0" type="danger">
+              失败: {{ currentTask.results.failed_count }}
             </el-tag>
+            <el-button 
+              v-if="currentTask.status === 'completed'" 
+              @click="downloadResults(currentTask)" 
+              type="success" 
+              size="small"
+              :icon="Download"
+            >
+              下载结果
+            </el-button>
           </div>
           
           <!-- 操作按钮 -->
           <div class="task-actions">
             <el-button 
-              @click="viewTaskDetails(task)" 
-              type="primary" 
-              size="small"
-            >
-              查看详情
-            </el-button>
-            <el-button 
-              v-if="task.status === 'processing'" 
-              @click="cancelTask(task.task_id)" 
+              v-if="currentTask.status === 'processing'" 
+              @click="cancelTask(currentTask.task_id)" 
               type="danger" 
               size="small"
+              :icon="CircleClose"
             >
               取消任务
             </el-button>
-            <el-button 
-              v-if="task.status === 'completed'" 
-              @click="downloadResults(task)" 
-              type="success" 
-              size="small"
-            >
-              下载结果
-            </el-button>
           </div>
         </div>
-      </el-card>
-    </div>
-    
-    <!-- 空状态 -->
-    <div v-else class="empty-state">
-      <el-empty description="暂无批量任务" />
-    </div>
-    
-    <!-- 任务详情对话框 -->
-    <el-dialog
-      v-model="showTaskDetails"
-      :title="`任务详情 - ${currentTask?.task_id?.substring(0, 8)}...`"
-      width="80%"
-      :before-close="closeTaskDetails"
-    >
-      <div v-if="currentTask" class="task-details">
-        <div class="details-section">
-          <h4>基本信息</h4>
-          <p><strong>任务ID:</strong> {{ currentTask.task_id }}</p>
-          <p><strong>状态:</strong> {{ getStatusText(currentTask.status) }}</p>
-          <p><strong>创建时间:</strong> {{ formatTime(currentTask.created_at) }}</p>
-          <p><strong>更新时间:</strong> {{ formatTime(currentTask.updated_at) }}</p>
-          <p><strong>Prompt:</strong> {{ currentTask.prompt }}</p>
-        </div>
         
-        <div class="details-section">
-          <h4>进度信息</h4>
-          <p><strong>总图片数:</strong> {{ currentTask.total_images }}</p>
-          <p><strong>已处理:</strong> {{ currentTask.processed_images }}</p>
-          <p><strong>进度:</strong> {{ Math.round(currentTask.progress) }}%</p>
-        </div>
-        
-        <div class="details-section">
-          <h4>图片列表</h4>
-          <div class="images-grid">
-            <div 
-              v-for="(image, index) in currentTask.images" 
-              :key="index"
-              class="image-item"
-            >
-              <div class="image-info">
-                <p><strong>文件名:</strong> {{ image.filename }}</p>
-                <p><strong>状态:</strong> {{ getStatusText(image.status) }}</p>
-                <p v-if="image.error"><strong>错误:</strong> {{ image.error }}</p>
-              </div>
-              <div v-if="image.result_url" class="image-result">
+        <!-- 生成结果详情 -->
+        <div v-if="currentTask.results && currentTask.results.generated_images && currentTask.results.generated_images.length > 0" class="task-results">
+          <el-divider>生成结果</el-divider>
+          <div class="results-grid">
+            <div v-for="(result, index) in currentTask.results.generated_images" :key="index" class="result-item">
+              <div class="result-image">
                 <el-image
-                  :src="image.result_url"
+                  v-if="result.generated_url"
+                  :src="result.generated_url"
                   fit="cover"
-                  style="width: 100px; height: 100px; border-radius: 4px;"
-                />
+                  style="width: 120px; height: 120px; border-radius: 8px;"
+                  lazy
+                >
+                  <template #error>
+                    <div class="image-slot">
+                      <el-icon><Picture /></el-icon>
+                    </div>
+                  </template>
+                </el-image>
+                <div v-else class="image-slot no-image">
+                  <el-icon><Picture /></el-icon>
+                  <span>无图片</span>
+                </div>
+              </div>
+              <div class="result-info">
+                <p class="result-filename">{{ result.filename }}</p>
+                <p class="result-description">{{ result.description ? result.description.substring(0, 50) + '...' : '无描述' }}</p>
                 <el-button 
+                  v-if="result.generated_url"
                   type="primary" 
                   size="small" 
-                  @click="downloadSingleImage(image.result_url, image.filename)"
-                  style="margin-top: 8px;"
+                  :icon="Download" 
+                  @click="downloadSingleImage(result.generated_url, result.generated_filename || `generated_${currentTask.task_id.substring(0,4)}_${index}.png`)"
+                  plain
                 >
                   下载
                 </el-button>
@@ -140,8 +112,17 @@
             </div>
           </div>
         </div>
-      </div>
-    </el-dialog>
+      </el-card>
+    </div>
+    
+    <!-- 无任务状态 -->
+    <div v-else class="no-task">
+      <el-empty description="暂无任务">
+        <template #image>
+          <el-icon size="60"><Document /></el-icon>
+        </template>
+      </el-empty>
+    </div>
   </div>
 </template>
 
@@ -149,81 +130,78 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
+import { Refresh, CircleClose, Picture, Download, Document } from '@element-plus/icons-vue'
 
 export default {
   name: 'BatchTaskManager',
+  components: {
+    Refresh,
+    CircleClose,
+    Picture,
+    Download,
+    Document
+  },
   setup() {
-    const tasks = ref([])
-    const showTaskDetails = ref(false)
     const currentTask = ref(null)
-    const refreshInterval = ref(null)
+    const isLoadingTasks = ref(false)
+    let refreshInterval = null
 
-    // 获取任务列表
-    const fetchTasks = async () => {
+    // 获取最新任务
+    const fetchLatestTask = async () => {
       try {
+        isLoadingTasks.value = true
         const response = await axios.get('/api/batch/tasks')
-        if (response.data.success) {
-          tasks.value = response.data.tasks
+        
+        if (response.data.success && response.data.tasks && response.data.tasks.length > 0) {
+          // 只显示最新的任务
+          currentTask.value = response.data.tasks[0]
+        } else {
+          currentTask.value = null
         }
       } catch (error) {
-        console.error('获取任务列表失败:', error)
+        console.error('获取任务失败:', error)
+        ElMessage.error('获取任务失败')
+      } finally {
+        isLoadingTasks.value = false
       }
     }
 
-    // 刷新任务列表
+    // 刷新任务
     const refreshTasks = () => {
-      fetchTasks()
-    }
-
-    // 查看任务详情
-    const viewTaskDetails = async (task) => {
-      try {
-        const response = await axios.get(`/api/batch/tasks/${task.task_id}`)
-        if (response.data.success) {
-          currentTask.value = response.data.task
-          showTaskDetails.value = true
-        }
-      } catch (error) {
-        ElMessage.error('获取任务详情失败')
-        console.error('获取任务详情失败:', error)
-      }
-    }
-
-    // 关闭任务详情
-    const closeTaskDetails = () => {
-      showTaskDetails.value = false
-      currentTask.value = null
+      fetchLatestTask()
     }
 
     // 取消任务
     const cancelTask = async (taskId) => {
       try {
         await ElMessageBox.confirm('确定要取消这个任务吗？', '确认取消', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
           type: 'warning'
         })
         
         const response = await axios.delete(`/api/batch/tasks/${taskId}`)
         if (response.data.success) {
           ElMessage.success('任务已取消')
-          fetchTasks()
+          fetchLatestTask()
+        } else {
+          ElMessage.error('取消任务失败')
         }
       } catch (error) {
         if (error !== 'cancel') {
-          ElMessage.error('取消任务失败')
           console.error('取消任务失败:', error)
+          ElMessage.error('取消任务失败')
         }
       }
     }
 
-    // 下载结果
+    // 下载结果 (批量)
     const downloadResults = async (task) => {
       try {
         const response = await axios.get(`/api/batch/tasks/${task.task_id}/results`)
         if (response.data.success) {
           const results = response.data.results
-          const images = response.data.images
           
-          // 下载所有生成的图片
           let downloadCount = 0
           
           // 从 results.generated_images 中下载
@@ -231,7 +209,6 @@ export default {
             for (let i = 0; i < results.generated_images.length; i++) {
               const imageInfo = results.generated_images[i]
               if (imageInfo.generated_url) {
-                // 创建下载链接
                 const link = document.createElement('a')
                 link.href = imageInfo.generated_url
                 link.download = imageInfo.generated_filename || `generated_${task.task_id.substring(0, 8)}_${i + 1}.png`
@@ -275,26 +252,26 @@ export default {
 
     // 获取状态标签类型
     const getStatusTagType = (status) => {
-      const statusMap = {
-        'pending': 'info',
-        'processing': 'warning',
-        'completed': 'success',
-        'failed': 'danger',
-        'cancelled': 'info'
+      switch (status) {
+        case 'pending': return 'info'
+        case 'processing': return 'warning'
+        case 'completed': return 'success'
+        case 'failed': return 'danger'
+        case 'cancelled': return 'info'
+        default: return 'info'
       }
-      return statusMap[status] || 'info'
     }
 
     // 获取状态文本
     const getStatusText = (status) => {
-      const statusMap = {
-        'pending': '等待中',
-        'processing': '处理中',
-        'completed': '已完成',
-        'failed': '失败',
-        'cancelled': '已取消'
+      switch (status) {
+        case 'pending': return '等待中'
+        case 'processing': return '处理中'
+        case 'completed': return '已完成'
+        case 'failed': return '失败'
+        case 'cancelled': return '已取消'
+        default: return '未知'
       }
-      return statusMap[status] || '未知'
     }
 
     // 获取任务状态样式类
@@ -304,30 +281,27 @@ export default {
 
     // 格式化时间
     const formatTime = (timeString) => {
-      return new Date(timeString).toLocaleString('zh-CN')
+      if (!timeString) return '未知时间'
+      const date = new Date(timeString)
+      return date.toLocaleString('zh-CN')
     }
 
-    // 组件挂载时获取任务列表
     onMounted(() => {
-      fetchTasks()
-      // 每5秒自动刷新一次
-      refreshInterval.value = setInterval(fetchTasks, 5000)
+      fetchLatestTask()
+      // 每3秒刷新一次任务状态
+      refreshInterval = setInterval(fetchLatestTask, 3000)
     })
 
-    // 组件卸载时清除定时器
     onUnmounted(() => {
-      if (refreshInterval.value) {
-        clearInterval(refreshInterval.value)
+      if (refreshInterval) {
+        clearInterval(refreshInterval)
       }
     })
 
     return {
-      tasks,
-      showTaskDetails,
       currentTask,
+      isLoadingTasks,
       refreshTasks,
-      viewTaskDetails,
-      closeTaskDetails,
       cancelTask,
       downloadResults,
       downloadSingleImage,
@@ -342,7 +316,7 @@ export default {
 
 <style scoped>
 .batch-task-manager {
-  padding: 20px;
+  height: 100%;
 }
 
 .task-header {
@@ -354,21 +328,141 @@ export default {
 
 .task-header h3 {
   margin: 0;
+  color: #303133;
 }
 
-.tasks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+.current-task {
+  margin-bottom: 20px;
 }
 
 .task-card {
-  transition: all 0.3s ease;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
-.task-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.task-header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.task-id {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 14px;
+  color: #606266;
+}
+
+.api-type {
+  font-size: 12px;
+  color: #909399;
+  background: #f5f7fa;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.task-content {
+  padding: 16px 0;
+}
+
+.task-info p {
+  margin: 8px 0;
+  color: #606266;
+}
+
+.progress-section {
+  margin: 16px 0;
+}
+
+.progress-text {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.results-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.task-actions {
+  margin-top: 16px;
+}
+
+.task-results {
+  margin-top: 20px;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.result-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.result-image {
+  margin-bottom: 8px;
+}
+
+.image-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  color: #c0c4cc;
+}
+
+.image-slot.no-image {
+  background: #fef0f0;
+  color: #f56c6c;
+}
+
+.result-info {
+  text-align: center;
+  width: 100%;
+}
+
+.result-filename {
+  font-size: 12px;
+  color: #606266;
+  margin: 4px 0;
+  word-break: break-all;
+}
+
+.result-description {
+  font-size: 11px;
+  color: #909399;
+  margin: 4px 0 8px 0;
+  line-height: 1.4;
+}
+
+.no-task {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+/* 任务状态样式 */
+.task-status-pending {
+  border-left: 4px solid #409eff;
 }
 
 .task-status-processing {
@@ -383,96 +477,7 @@ export default {
   border-left: 4px solid #f56c6c;
 }
 
-.task-header-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.task-id {
-  font-family: monospace;
-  font-size: 14px;
-}
-
-.task-content {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.task-info p {
-  margin: 5px 0;
-  font-size: 14px;
-}
-
-.progress-section {
-  margin: 10px 0;
-}
-
-.progress-text {
-  margin: 5px 0 0 0;
-  font-size: 12px;
-  color: #666;
-}
-
-.results-summary {
-  display: flex;
-  gap: 10px;
-}
-
-.task-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px;
-}
-
-.task-details {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.details-section {
-  margin-bottom: 20px;
-  padding: 15px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-}
-
-.details-section h4 {
-  margin: 0 0 10px 0;
-  color: #333;
-}
-
-.details-section p {
-  margin: 5px 0;
-  font-size: 14px;
-}
-
-.images-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 15px;
-  margin-top: 10px;
-}
-
-.image-item {
-  padding: 10px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background-color: #fafafa;
-}
-
-.image-info p {
-  margin: 3px 0;
-  font-size: 12px;
-}
-
-.image-result {
-  margin-top: 10px;
-  text-align: center;
+.task-status-cancelled {
+  border-left: 4px solid #909399;
 }
 </style>

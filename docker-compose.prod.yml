@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # Redis服务
+  redis:
+    image: redis:7-alpine
+    container_name: batchgen_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-batchgen123}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 后端服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: batchgen_backend
+    restart: always
+    ports:
+      - "5001:5001"
+    environment:
+      - FLASK_ENV=production
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-batchgen123}@redis:6379/0
+    volumes:
+      - ./uploads:/app/uploads
+      - ./results:/app/results
+      - ./config:/app/config
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: batchgen_frontend
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  redis_data:
+    driver: local

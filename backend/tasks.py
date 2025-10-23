@@ -204,7 +204,7 @@ def update_task_results(self, task_id, results):
             'error': str(e)
         }
 
-def process_batch_task_sync(task_id, images_data, prompt):
+def process_batch_task_sync(task_id, images_data, prompt, api_type="gemini"):
     """
     同步处理批量任务（不使用Celery）
     
@@ -212,6 +212,7 @@ def process_batch_task_sync(task_id, images_data, prompt):
         task_id: 任务ID
         images_data: 图片数据列表
         prompt: 生成提示词
+        api_type: API类型 ("gemini" 或 "doubao")
     
     Returns:
         dict: 批量任务结果
@@ -227,13 +228,10 @@ def process_batch_task_sync(task_id, images_data, prompt):
             progress = (i / total_images) * 100
             task_manager.update_task_progress(task_id, progress, i + 1)
             
-            # 调用单图片生成
-            result = generate_single_image_sync(
-                image_data['file_data'],
-                image_data['filename'],
-                prompt,
-                task_id
-            )
+            # 使用统一的API生成器
+            from ai_image_generator import create_image_generator
+            generator = create_image_generator(api_type)
+            result = generator.generate_image(image_data['file_data'], prompt)
             
             results.append(result)
             
