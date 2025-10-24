@@ -1,75 +1,126 @@
 <template>
   <div id="app">
-    <el-container>
-      <el-header>
-        <h1>BatchGen Pro - V3</h1>
-        <p>批量图片生成工具 - 支持Gemini和豆包API</p>
-      </el-header>
-      
-      <el-main>
-        <el-row :gutter="20">
-          <!-- 左侧：批量上传和配置 -->
-          <el-col :span="8">
-            <el-card>
-              <template #header>
-                <span>批量图片上传</span>
-              </template>
-              
-              <MultiImageUpload 
-                v-model:files="uploadedFiles"
-                @files-change="handleBatchFileChange"
-              />
-              
-              <el-divider />
-              
-              <!-- API选择器 -->
-              <div class="api-selector">
-                <h4>选择AI服务</h4>
-                <el-radio-group v-model="selectedApi" size="small">
-                  <el-radio-button label="gemini">Gemini API</el-radio-button>
-                  <el-radio-button label="doubao">豆包 API</el-radio-button>
-                </el-radio-group>
-                <p class="api-description">
-                  {{ selectedApi === 'gemini' ? '使用Google Gemini 2.5 Flash Image模型' : '使用豆包Seedream 4.0模型' }}
-                </p>
+    <div class="app-container">
+      <div class="main-content">
+        <!-- 左侧操作面板 -->
+        <div class="left-panel">
+          <div class="panel-content">
+            <!-- 顶部标题区域 -->
+            <div class="header-section">
+              <div class="title-row">
+                <div class="logo-icon">
+                  <div class="icon-stack">
+                    <div class="icon-layer"></div>
+                    <div class="icon-layer"></div>
+                    <div class="icon-layer"></div>
+                  </div>
+                </div>
+                <h1 class="app-title">BatchGen Pro</h1>
+                <p class="app-subtitle">批量图片生成工具</p>
               </div>
               
-              <el-divider />
+              <!-- 标签切换 -->
+              <div class="tab-switcher">
+                <div class="tab-item" :class="{ active: activeTab === 'generate' }" @click="activeTab = 'generate'">
+                  <span>批量生图</span>
+                </div>
+                <div class="tab-item" :class="{ active: activeTab === 'edit' }" @click="activeTab = 'edit'">
+                  <span>批量改图</span>
+                </div>
+              </div>
               
-              <PromptInput 
-                v-model:prompt="batchPrompt"
+              <p class="tab-description">
+                批量改图会对多张图用同一份提示词来生图
+              </p>
+            </div>
+            
+            <!-- 操作区域 -->
+            <div class="operation-section">
+              <!-- 大模型选择器 -->
+              <div class="form-group">
+                <label class="form-label">大模型</label>
+                <el-select 
+                  v-model="selectedModel" 
+                  class="model-selector"
+                  placeholder="选择模型"
+                >
+                  <el-option
+                    v-for="model in availableModels"
+                    :key="model.value"
+                    :label="model.label"
+                    :value="model.value"
+                  />
+                </el-select>
+              </div>
+              
+              <!-- Prompt输入 -->
+              <div class="form-group">
+                <label class="form-label">Prompt</label>
+                <el-input
+                  v-model="batchPrompt"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="输入提示词"
+                  class="prompt-input"
+                />
+              </div>
+              
+              <!-- 参考图片上传 -->
+              <div class="form-group">
+                <div class="upload-header">
+                  <label class="form-label">参考图片</label>
+                  <el-icon class="clear-icon" @click="clearAllImages"><RefreshLeft /></el-icon>
+                </div>
+                
+                <MultiImageUpload 
+                  v-model:files="uploadedFiles"
+                  @files-change="handleBatchFileChange"
+                />
+              </div>
+            </div>
+            
+            <!-- 开始按钮 -->
+            <div class="start-button-container">
+              <el-button 
+                type="primary" 
+                class="start-button"
                 :loading="isBatchGenerating"
-                @generate="handleBatchGenerate"
-                button-text="开始批量生成"
-                :disabled="uploadedFiles.length === 0"
-              />
-            </el-card>
-          </el-col>
-          
-          <!-- 右侧：任务管理 -->
-          <el-col :span="16">
-            <BatchTaskManager />
-          </el-col>
-        </el-row>
-      </el-main>
-    </el-container>
+                @click="handleBatchGenerate"
+                :disabled="uploadedFiles.length === 0 || !batchPrompt.trim()"
+              >
+                开始
+              </el-button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 分隔线 -->
+        <div class="divider"></div>
+        
+        <!-- 右侧结果面板 -->
+        <div class="right-panel">
+          <BatchTaskManager />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowDown, RefreshLeft } from '@element-plus/icons-vue'
 import axios from 'axios'
 import MultiImageUpload from './components/MultiImageUpload.vue'
-import PromptInput from './components/PromptInput.vue'
 import BatchTaskManager from './components/BatchTaskManager.vue'
 
 export default {
   name: 'App',
   components: {
     MultiImageUpload,
-    PromptInput,
-    BatchTaskManager
+    BatchTaskManager,
+    ArrowDown,
+    RefreshLeft
   },
   setup() {
     // 批量生成相关状态
@@ -77,10 +128,34 @@ export default {
     const batchPrompt = ref('')
     const isBatchGenerating = ref(false)
     const selectedApi = ref('gemini') // 默认使用Gemini
+    const activeTab = ref('edit') // 默认选中批量改图
+    const selectedModel = ref('gemini-2.5-flash-image') // 默认模型
+    
+    // 可用模型列表
+    const availableModels = ref([
+      { value: 'gemini-2.5-flash-image', label: 'gemini-2.5-flash-image' },
+      { value: 'doubao-seedream-4-0-250828', label: 'doubao-seedream-4-0-250828' }
+    ])
 
     // 处理批量文件变化
     const handleBatchFileChange = (files) => {
       uploadedFiles.value = files
+    }
+
+    // 清空所有图片
+    const clearAllImages = () => {
+      uploadedFiles.value = []
+      ElMessage.success('已清空所有图片')
+    }
+
+    // 根据模型名称获取API类型
+    const getApiTypeFromModel = (modelName) => {
+      if (modelName.includes('gemini')) {
+        return 'gemini'
+      } else if (modelName.includes('doubao')) {
+        return 'doubao'
+      }
+      return 'gemini' // 默认
     }
 
     // 批量生成处理
@@ -107,7 +182,7 @@ export default {
         
         // 添加提示词和API类型
         formData.append('prompt', batchPrompt.value)
-        formData.append('api_type', selectedApi.value)
+        formData.append('api_type', getApiTypeFromModel(selectedModel.value))
         
         const response = await axios.post('/api/batch/generate', formData, {
           headers: {
@@ -137,67 +212,309 @@ export default {
       batchPrompt,
       isBatchGenerating,
       selectedApi,
+      activeTab,
+      selectedModel,
+      availableModels,
       handleBatchFileChange,
-      handleBatchGenerate
+      handleBatchGenerate,
+      clearAllImages,
+      getApiTypeFromModel
     }
   }
 }
 </script>
 
+<style>
+/* 全局样式重置 */
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+</style>
+
 <style scoped>
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #2c3e50;
-}
-
-.el-header {
-  background-color: #f5f7fa;
-  color: #333;
-  text-align: center;
-  padding: 20px;
-  border-bottom: 1px solid #e4e7ed;
-}
-
-.el-header h1 {
-  margin: 0 0 10px 0;
-  font-size: 28px;
-  font-weight: bold;
-}
-
-.el-header p {
+  color: #333333;
+  background-color: #efefef;
+  height: 100vh;
   margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.app-container {
+  padding: 8px;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+.main-content {
+  display: flex;
+  background: white;
+  border: 1px solid #eeeeee;
+  border-radius: 12px;
+  overflow: hidden;
+  height: calc(100vh - 16px);
+}
+
+/* 左侧面板 */
+.left-panel {
+  width: 440px;
+  flex-shrink: 0;
+  border-right: 1px solid #eeeeee;
+  background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-content {
+  padding: 20px 32px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* 顶部标题区域 */
+.header-section {
+  padding-bottom: 20px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 10px 0;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  position: relative;
+}
+
+.icon-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.icon-layer {
+  position: absolute;
+  background: white;
+  border: 1.62px solid #333333;
+  border-radius: 1.62px;
+  width: 22.86px;
+  height: 16.92px;
+}
+
+.icon-layer:nth-child(1) {
+  top: 3.78px;
+  left: 0.9px;
+}
+
+.icon-layer:nth-child(2) {
+  top: 7.74px;
+  left: 4.86px;
+}
+
+.icon-layer:nth-child(3) {
+  top: 11.7px;
+  left: 8.64px;
+}
+
+.app-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #333333;
+  margin: 0;
+}
+
+.app-subtitle {
   font-size: 16px;
-  color: #666;
+  color: #333333;
+  margin: 0;
 }
 
-.el-main {
-  padding: 20px;
+/* 标签切换 */
+.tab-switcher {
+  display: flex;
+  background: #eeeeee;
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
 }
 
-.api-selector {
-  margin: 20px 0;
+.tab-item {
+  flex: 1;
+  padding: 3px 28px;
+  text-align: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.api-selector h4 {
-  margin: 0 0 15px 0;
-  color: #303133;
-  font-size: 16px;
+.tab-item.active {
+  background: white;
+  border: 1px solid #dddddd;
 }
 
-.api-description {
-  margin: 10px 0 0 0;
+.tab-item span {
   font-size: 14px;
-  color: #606266;
-  font-style: italic;
+  color: #333333;
 }
 
-.el-card {
-  margin-bottom: 20px;
+.tab-description {
+  font-size: 14px;
+  color: #999999;
+  margin: 0;
+  padding-top: 10px;
 }
 
-.el-divider {
-  margin: 20px 0;
+/* 操作区域 */
+.operation-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333333;
+  margin: 0;
+}
+
+.model-selector {
+  width: 100%;
+}
+
+.model-selector :deep(.el-input__wrapper) {
+  border: 1px solid #dddddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.model-selector :deep(.el-input__inner) {
+  font-size: 14px;
+  color: #333333;
+}
+
+.prompt-input {
+  border-radius: 6px;
+}
+
+.prompt-input :deep(.el-textarea__inner) {
+  border: 1px solid #dddddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #333333;
+}
+
+.prompt-input :deep(.el-textarea__inner)::placeholder {
+  color: #bbbbbb;
+}
+
+.upload-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clear-icon {
+  font-size: 16px;
+  color: #333333;
+  cursor: pointer;
+}
+
+/* 开始按钮 */
+.start-button-container {
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.start-button {
+  width: 100%;
+  height: 40px;
+  background: #04a864;
+  border: 1px solid #dddddd;
+  border-radius: 6px;
+  font-size: 14px;
+  color: white;
+}
+
+.start-button:hover {
+  background: #038a56;
+}
+
+.start-button:disabled {
+  background: #cccccc;
+  color: #999999;
+}
+
+/* 分隔线 */
+.divider {
+  width: 1px;
+  background: #eeeeee;
+  flex-shrink: 0;
+}
+
+/* 右侧面板 */
+.right-panel {
+  flex: 1;
+  background: white;
+  padding: 20px 32px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .left-panel {
+    width: 380px;
+  }
+  
+  .panel-content {
+    padding: 16px 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+  }
+  
+  .left-panel {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #eeeeee;
+  }
+  
+  .divider {
+    width: 100%;
+    height: 1px;
+  }
+  
+  .right-panel {
+    padding: 16px 24px;
+  }
 }
 </style>

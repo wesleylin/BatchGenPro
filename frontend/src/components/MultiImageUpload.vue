@@ -1,66 +1,45 @@
 <template>
   <div class="multi-image-upload">
-    <el-upload
-      class="upload-demo"
-      drag
-      :auto-upload="false"
-      :on-change="handleFileChange"
-      :show-file-list="false"
-      accept="image/*"
-      multiple
-    >
-      <el-icon class="el-icon--upload"><upload /></el-icon>
-      <div class="el-upload__text">
-        将图片拖到此处，或<em>点击上传</em>
-      </div>
-      <template #tip>
-        <div class="el-upload__tip">
-          支持多文件上传，jpg/png/gif/webp 格式，单个文件不超过10MB
-        </div>
-      </template>
-    </el-upload>
+    <!-- 上传区域 -->
+    <div class="upload-area" @click="triggerUpload" @dragover.prevent @drop.prevent="handleDrop">
+      <el-icon class="upload-icon"><Upload /></el-icon>
+      <span class="upload-text">Upload Images</span>
+    </div>
     
     <!-- 文件列表 -->
     <div v-if="files.length > 0" class="files-list">
-      <h4>已选择的文件 ({{ files.length }})</h4>
-      <div class="files-grid">
-        <div 
-          v-for="(file, index) in files" 
-          :key="index" 
-          class="file-item"
-        >
+      <div 
+        v-for="(file, index) in files" 
+        :key="index" 
+        class="file-item"
+      >
+        <div class="file-thumbnail">
           <el-image
             :src="file.previewUrl"
             fit="cover"
-            style="width: 100px; height: 100px; border-radius: 8px;"
+            class="thumbnail-image"
           />
-          <div class="file-info">
-            <p class="filename">{{ file.name }}</p>
-            <p class="filesize">{{ formatFileSize(file.size) }}</p>
-            <el-button 
-              type="danger" 
-              size="small" 
-              @click="removeFile(index)"
-              icon="Delete"
-            >
-              删除
-            </el-button>
-          </div>
         </div>
-      </div>
-      
-      <div class="actions">
-        <el-button @click="clearAll" type="warning" size="small">
-          清空所有
-        </el-button>
+        <span class="filename">{{ file.name }}</span>
+        <el-icon class="delete-icon" @click="removeFile(index)"><Close /></el-icon>
       </div>
     </div>
+    
+    <!-- 隐藏的文件输入 -->
+    <input
+      ref="fileInput"
+      type="file"
+      multiple
+      accept="image/*"
+      @change="handleFileChange"
+      style="display: none"
+    />
   </div>
 </template>
 
 <script>
 import { ref, watch } from 'vue'
-import { Upload } from '@element-plus/icons-vue'
+import { Upload, Close } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 export default {
@@ -73,14 +52,31 @@ export default {
   },
   emits: ['files-change'],
   components: {
-    Upload
+    Upload,
+    Close
   },
   setup(props, { emit }) {
     const files = ref([...props.files])
+    const fileInput = ref(null)
 
-    const handleFileChange = (uploadFile) => {
-      const newFile = uploadFile.raw
-      if (newFile) {
+    const triggerUpload = () => {
+      fileInput.value?.click()
+    }
+
+    const handleFileChange = (event) => {
+      const selectedFiles = Array.from(event.target.files)
+      addFiles(selectedFiles)
+      // 清空input值，允许重复选择相同文件
+      event.target.value = ''
+    }
+
+    const handleDrop = (event) => {
+      const droppedFiles = Array.from(event.dataTransfer.files)
+      addFiles(droppedFiles)
+    }
+
+    const addFiles = (newFiles) => {
+      newFiles.forEach(newFile => {
         // 检查是否已存在相同文件
         const exists = files.value.some(f => f.name === newFile.name && f.size === newFile.size)
         if (exists) {
@@ -98,9 +94,9 @@ export default {
           size: newFile.size,
           previewUrl: previewUrl
         })
-        
-        emit('files-change', files.value)
-      }
+      })
+      
+      emit('files-change', files.value)
     }
 
     const removeFile = (index) => {
@@ -140,7 +136,10 @@ export default {
 
     return {
       files,
+      fileInput,
+      triggerUpload,
       handleFileChange,
+      handleDrop,
       removeFile,
       clearAll,
       formatFileSize
@@ -151,64 +150,86 @@ export default {
 
 <style scoped>
 .multi-image-upload {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.upload-demo {
-  margin-bottom: 20px;
+/* 上传区域 */
+.upload-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 92px;
+  background: #fafafa;
+  border: 1px dashed #dddddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
+.upload-area:hover {
+  border-color: #04a864;
+  background: #f0f9f5;
+}
+
+.upload-icon {
+  font-size: 20px;
+  color: #333333;
+}
+
+.upload-text {
+  font-size: 14px;
+  color: #333333;
+}
+
+/* 文件列表 */
 .files-list {
-  margin-top: 20px;
-  padding: 20px;
-  border: 2px dashed #d9d9d9;
-  border-radius: 8px;
-  background-color: #fafafa;
-}
-
-.files-list h4 {
-  margin: 0 0 15px 0;
-  color: #333;
-}
-
-.files-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 15px;
-  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
 }
 
 .file-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 10px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background-color: white;
+  gap: 10px;
+  padding: 0;
 }
 
-.file-info {
-  margin-top: 10px;
-  text-align: center;
+.file-thumbnail {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  background: #d9d9d9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.thumbnail-image {
+  width: 100%;
+  height: 100%;
 }
 
 .filename {
-  font-size: 12px;
-  font-weight: bold;
-  margin: 5px 0;
-  word-break: break-all;
+  flex: 1;
+  font-size: 14px;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.filesize {
-  font-size: 11px;
-  color: #666;
-  margin: 2px 0;
+.delete-icon {
+  font-size: 16px;
+  color: #333333;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.actions {
-  text-align: center;
-  padding-top: 10px;
-  border-top: 1px solid #e0e0e0;
+.delete-icon:hover {
+  color: #f56c6c;
 }
 </style>
