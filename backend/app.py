@@ -250,20 +250,9 @@ def create_batch_task():
 def create_batch_generate_task():
     """创建批量生图任务（同一参考图重复生成N次）"""
     try:
-        # 检查是否有参考图
-        if 'file' not in request.files:
-            return jsonify({'error': 'No reference image provided'}), 400
-        
-        file = request.files['file']
         prompt = request.form.get('prompt', '')
         image_count = int(request.form.get('image_count', 1))
         api_type = request.form.get('api_type', 'gemini')
-        
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        if not allowed_file(file.filename):
-            return jsonify({'error': 'Invalid file type'}), 400
         
         if not prompt.strip():
             return jsonify({'error': 'Prompt is required'}), 400
@@ -274,16 +263,21 @@ def create_batch_generate_task():
         if api_type not in SUPPORTED_APIS:
             return jsonify({'error': f'Unsupported API type: {api_type}'}), 400
         
-        # 保存参考图片
-        filename = secure_filename(file.filename)
-        file_id = str(uuid.uuid4())
-        new_filename = f"{file_id}_{filename}"
-        file_path = os.path.join(UPLOAD_FOLDER, new_filename)
-        file.save(file_path)
-        
-        # 读取参考图数据
-        with open(file_path, 'rb') as f:
-            reference_image_data = f.read()
+        # 参考图是可选的
+        reference_image_data = None
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename and allowed_file(file.filename):
+                # 保存参考图片
+                filename = secure_filename(file.filename)
+                file_id = str(uuid.uuid4())
+                new_filename = f"{file_id}_{filename}"
+                file_path = os.path.join(UPLOAD_FOLDER, new_filename)
+                file.save(file_path)
+                
+                # 读取参考图数据
+                with open(file_path, 'rb') as f:
+                    reference_image_data = f.read()
         
         # 创建虚拟的images_data用于任务管理
         images_data = [{'filename': f'generated_{i+1}.png'} for i in range(image_count)]

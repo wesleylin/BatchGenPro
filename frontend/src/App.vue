@@ -30,7 +30,7 @@
               </div>
               
               <p class="tab-description">
-                批量改图会对多张图用同一份提示词来生图
+                {{ activeTab === 'generate' ? '批量生图会用同一份提示词（可带参考图）重复生成多张图' : '批量改图会对多张图用同一份提示词来生图' }}
               </p>
             </div>
             
@@ -69,7 +69,7 @@
               <template v-if="activeTab === 'generate'">
                 <div class="form-group">
                   <div class="upload-header">
-                    <label class="form-label">参考图片（单张）</label>
+                    <label class="form-label">参考图片（可选）</label>
                     <el-icon class="clear-icon" @click="clearReferenceImage"><RefreshLeft /></el-icon>
                   </div>
                   
@@ -186,8 +186,8 @@ export default {
       if (!batchPrompt.value.trim()) return true
       
       if (activeTab.value === 'generate') {
-        // 批量生图：需要参考图
-        return !referenceImage.value
+        // 批量生图：只需要prompt，参考图可选
+        return false
       } else {
         // 批量改图：需要上传的图片
         return uploadedFiles.value.length === 0
@@ -245,11 +245,6 @@ export default {
 
     // 批量生图处理
     const handleBatchGenerate = async () => {
-      if (!referenceImage.value) {
-        ElMessage.warning('请先上传参考图片')
-        return
-      }
-      
       if (!batchPrompt.value.trim()) {
         ElMessage.warning('请输入生成提示词')
         return
@@ -260,8 +255,10 @@ export default {
       try {
         const formData = new FormData()
         
-        // 添加参考图片
-        formData.append('file', referenceImage.value)
+        // 添加参考图片（如果有）
+        if (referenceImage.value) {
+          formData.append('file', referenceImage.value)
+        }
         
         // 添加提示词、数量和API类型
         formData.append('prompt', batchPrompt.value)
@@ -272,7 +269,7 @@ export default {
           headers: {
             'Content-Type': 'multipart/form-data'
           },
-          timeout: 60000
+          timeout: 180000  // 增加到3分钟
         })
         
         if (response.data.success) {
@@ -322,7 +319,7 @@ export default {
           headers: {
             'Content-Type': 'multipart/form-data'
           },
-          timeout: 60000
+          timeout: 180000  // 增加到3分钟
         })
         
         if (response.data.success) {

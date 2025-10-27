@@ -59,7 +59,7 @@ class AIImageGenerator:
         生成图片的统一接口
         
         Args:
-            image_data: 原始图片的二进制数据
+            image_data: 原始图片的二进制数据（可选，None表示纯文本生成）
             prompt: 生成提示词
             
         Returns:
@@ -78,15 +78,21 @@ class AIImageGenerator:
     def _generate_with_gemini(self, image_data, prompt):
         """使用Gemini API生成图片"""
         try:
-            # 将二进制数据转换为PIL Image
-            image = Image.open(io.BytesIO(image_data))
+            # 根据是否有参考图选择不同的prompt
+            if image_data:
+                # 有参考图：图像编辑模式
+                image = Image.open(io.BytesIO(image_data))
+                full_prompt = f"Create a picture of my image with the following changes: {prompt}"
+                contents = [full_prompt, image]
+            else:
+                # 无参考图：纯文本生成模式
+                full_prompt = f"Create an image based on this description: {prompt}"
+                contents = [full_prompt]
             
             # 调用Gemini API生成图片
-            full_prompt = f"Create a picture of my image with the following changes: {prompt}"
-            
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=[full_prompt, image]
+                contents=contents
             )
             
             # 处理响应
@@ -129,20 +135,25 @@ class AIImageGenerator:
     def _generate_with_doubao(self, image_data, prompt):
         """使用豆包API生成图片"""
         try:
-            # 豆包API需要将图片转换为base64
-            image_base64 = base64.b64encode(image_data).decode('utf-8')
-            
             # 构造请求数据
             request_data = {
                 "model": self.model,
-                "prompt": f"基于我的图片进行以下修改: {prompt}",
                 "size": "2K",
                 "sequential_image_generation": "disabled",
                 "stream": False,
                 "response_format": "url",
-                "watermark": self.watermark,  # 使用配置的水印设置
-                "image": f"data:image/png;base64,{image_base64}"
+                "watermark": self.watermark  # 使用配置的水印设置
             }
+            
+            # 根据是否有参考图选择不同的prompt
+            if image_data:
+                # 有参考图：图像编辑模式
+                image_base64 = base64.b64encode(image_data).decode('utf-8')
+                request_data["prompt"] = f"基于我的图片进行以下修改: {prompt}"
+                request_data["image"] = f"data:image/png;base64,{image_base64}"
+            else:
+                # 无参考图：纯文本生成模式
+                request_data["prompt"] = prompt
             
             # 发送请求
             response = requests.post(
