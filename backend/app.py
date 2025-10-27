@@ -246,6 +246,78 @@ def create_batch_task():
         app.logger.error(f"Create batch task error: {str(e)}")
         return jsonify({'success': False, 'error': f'创建任务失败: {str(e)}'}), 500
 
+@app.route('/api/batch/generate-from-image', methods=['POST'])
+def create_batch_generate_task():
+    """创建批量生图任务（同一参考图重复生成N次）"""
+    try:
+        # 检查是否有参考图
+        if 'file' not in request.files:
+            return jsonify({'error': 'No reference image provided'}), 400
+        
+        file = request.files['file']
+        prompt = request.form.get('prompt', '')
+        image_count = int(request.form.get('image_count', 1))
+        api_type = request.form.get('api_type', 'gemini')
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        if not prompt.strip():
+            return jsonify({'error': 'Prompt is required'}), 400
+        
+        if image_count < 1 or image_count > 10:
+            return jsonify({'error': 'Image count must be between 1 and 10'}), 400
+        
+        if api_type not in SUPPORTED_APIS:
+            return jsonify({'error': f'Unsupported API type: {api_type}'}), 400
+        
+        # 保存参考图片
+        filename = secure_filename(file.filename)
+        file_id = str(uuid.uuid4())
+        new_filename = f"{file_id}_{filename}"
+        file_path = os.path.join(UPLOAD_FOLDER, new_filename)
+        file.save(file_path)
+        
+        # 读取参考图数据
+        with open(file_path, 'rb') as f:
+            reference_image_data = f.read()
+        
+        # 创建虚拟的images_data用于任务管理
+        images_data = [{'filename': f'generated_{i+1}.png'} for i in range(image_count)]
+        
+        # 创建批量任务
+        task_id, task_data = task_manager.create_task(images_data, prompt, api_type)
+        
+        # 更新任务状态为处理中
+        task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
+        
+        # 同步处理批量生图
+        try:
+            from tasks import process_batch_generate_sync
+            result = process_batch_generate_sync(task_id, reference_image_data, prompt, image_count, api_type)
+            
+            if result['success']:
+                task_manager.update_task_status(task_id, TaskStatus.COMPLETED)
+            else:
+                task_manager.update_task_status(task_id, TaskStatus.FAILED)
+        except Exception as e:
+            app.logger.error(f"Batch generate processing error: {str(e)}")
+            task_manager.update_task_status(task_id, TaskStatus.FAILED)
+        
+        return jsonify({
+            'success': True,
+            'task_id': task_id,
+            'message': f'批量生图任务已创建，将生成{image_count}张图片',
+            'task_data': task_data
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Create batch generate task error: {str(e)}")
+        return jsonify({'success': False, 'error': f'创建任务失败: {str(e)}'}), 500
+
 @app.route('/api/batch/tasks', methods=['GET'])
 def get_batch_tasks():
     """获取所有批量任务列表"""

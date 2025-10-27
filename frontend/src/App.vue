@@ -65,18 +65,54 @@
                 />
               </div>
               
-              <!-- 参考图片上传 -->
-              <div class="form-group">
-                <div class="upload-header">
-                  <label class="form-label">参考图片</label>
-                  <el-icon class="clear-icon" @click="clearAllImages"><RefreshLeft /></el-icon>
+              <!-- 批量生图：参考图片上传（单图） + 数量选择 -->
+              <template v-if="activeTab === 'generate'">
+                <div class="form-group">
+                  <div class="upload-header">
+                    <label class="form-label">参考图片（单张）</label>
+                    <el-icon class="clear-icon" @click="clearReferenceImage"><RefreshLeft /></el-icon>
+                  </div>
+                  
+                  <el-upload
+                    class="reference-upload"
+                    :auto-upload="false"
+                    :limit="1"
+                    :on-change="handleReferenceImageChange"
+                    :on-remove="handleReferenceImageRemove"
+                    :file-list="referenceImageList"
+                    accept="image/*"
+                    list-type="picture-card"
+                  >
+                    <el-icon><Plus /></el-icon>
+                  </el-upload>
                 </div>
                 
-                <MultiImageUpload 
-                  v-model:files="uploadedFiles"
-                  @files-change="handleBatchFileChange"
-                />
-              </div>
+                <div class="form-group">
+                  <label class="form-label">生成数量</label>
+                  <el-input-number 
+                    v-model="imageCount" 
+                    :min="1" 
+                    :max="10" 
+                    class="count-selector"
+                  />
+                  <span class="count-hint">最多生成10张</span>
+                </div>
+              </template>
+              
+              <!-- 批量改图：参考图片上传（多图） -->
+              <template v-if="activeTab === 'edit'">
+                <div class="form-group">
+                  <div class="upload-header">
+                    <label class="form-label">参考图片</label>
+                    <el-icon class="clear-icon" @click="clearAllImages"><RefreshLeft /></el-icon>
+                  </div>
+                  
+                  <MultiImageUpload 
+                    v-model:files="uploadedFiles"
+                    @files-change="handleBatchFileChange"
+                  />
+                </div>
+              </template>
             </div>
             
             <!-- 开始按钮 -->
@@ -85,8 +121,8 @@
                 type="primary" 
                 class="start-button"
                 :loading="isBatchGenerating"
-                @click="handleBatchGenerate"
-                :disabled="uploadedFiles.length === 0 || !batchPrompt.trim()"
+                @click="handleStartTask"
+                :disabled="isStartButtonDisabled"
               >
                 开始
               </el-button>
@@ -107,9 +143,9 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, RefreshLeft } from '@element-plus/icons-vue'
+import { ArrowDown, RefreshLeft, Plus } from '@element-plus/icons-vue'
 import axios from 'axios'
 import MultiImageUpload from './components/MultiImageUpload.vue'
 import BatchTaskManager from './components/BatchTaskManager.vue'
@@ -120,11 +156,19 @@ export default {
     MultiImageUpload,
     BatchTaskManager,
     ArrowDown,
-    RefreshLeft
+    RefreshLeft,
+    Plus
   },
   setup() {
-    // 批量生成相关状态
+    // 批量改图相关状态
     const uploadedFiles = ref([])
+    
+    // 批量生图相关状态
+    const referenceImage = ref(null)
+    const referenceImageList = ref([])
+    const imageCount = ref(3) // 默认生成3张
+    
+    // 通用状态
     const batchPrompt = ref('')
     const isBatchGenerating = ref(false)
     const selectedApi = ref('gemini') // 默认使用Gemini
@@ -137,15 +181,47 @@ export default {
       { value: 'doubao-seedream-4-0-250828', label: 'doubao-seedream-4-0-250828' }
     ])
 
-    // 处理批量文件变化
+    // 计算属性：开始按钮是否禁用
+    const isStartButtonDisabled = computed(() => {
+      if (!batchPrompt.value.trim()) return true
+      
+      if (activeTab.value === 'generate') {
+        // 批量生图：需要参考图
+        return !referenceImage.value
+      } else {
+        // 批量改图：需要上传的图片
+        return uploadedFiles.value.length === 0
+      }
+    })
+
+    // 处理批量改图文件变化
     const handleBatchFileChange = (files) => {
       uploadedFiles.value = files
     }
 
-    // 清空所有图片
+    // 处理批量生图参考图变化
+    const handleReferenceImageChange = (file) => {
+      referenceImage.value = file.raw
+      referenceImageList.value = [file]
+    }
+
+    // 移除参考图
+    const handleReferenceImageRemove = () => {
+      referenceImage.value = null
+      referenceImageList.value = []
+    }
+
+    // 清空所有批量改图的图片
     const clearAllImages = () => {
       uploadedFiles.value = []
       ElMessage.success('已清空所有图片')
+    }
+
+    // 清空批量生图的参考图
+    const clearReferenceImage = () => {
+      referenceImage.value = null
+      referenceImageList.value = []
+      ElMessage.success('已清空参考图')
     }
 
     // 根据模型名称获取API类型
@@ -158,8 +234,66 @@ export default {
       return 'gemini' // 默认
     }
 
-    // 批量生成处理
+    // 统一的开始任务处理
+    const handleStartTask = async () => {
+      if (activeTab.value === 'generate') {
+        await handleBatchGenerate()
+      } else {
+        await handleBatchEdit()
+      }
+    }
+
+    // 批量生图处理
     const handleBatchGenerate = async () => {
+      if (!referenceImage.value) {
+        ElMessage.warning('请先上传参考图片')
+        return
+      }
+      
+      if (!batchPrompt.value.trim()) {
+        ElMessage.warning('请输入生成提示词')
+        return
+      }
+
+      isBatchGenerating.value = true
+      
+      try {
+        const formData = new FormData()
+        
+        // 添加参考图片
+        formData.append('file', referenceImage.value)
+        
+        // 添加提示词、数量和API类型
+        formData.append('prompt', batchPrompt.value)
+        formData.append('image_count', imageCount.value)
+        formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+        
+        const response = await axios.post('/api/batch/generate-from-image', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          },
+          timeout: 60000
+        })
+        
+        if (response.data.success) {
+          ElMessage.success(`批量生图任务已创建！将生成${imageCount.value}张图片`)
+          // 清空参考图和提示词
+          referenceImage.value = null
+          referenceImageList.value = []
+          batchPrompt.value = ''
+        } else {
+          ElMessage.error('创建批量生图任务失败: ' + response.data.error)
+        }
+      } catch (error) {
+        console.error('批量生图错误:', error)
+        ElMessage.error('批量生图失败: ' + (error.response?.data?.error || error.message))
+      } finally {
+        isBatchGenerating.value = false
+      }
+    }
+
+    // 批量改图处理
+    const handleBatchEdit = async () => {
       if (uploadedFiles.value.length === 0) {
         ElMessage.warning('请先上传图片')
         return
@@ -192,16 +326,16 @@ export default {
         })
         
         if (response.data.success) {
-          ElMessage.success(`批量任务已创建！任务ID: ${response.data.task_id.substring(0, 8)}...`)
+          ElMessage.success(`批量改图任务已创建！任务ID: ${response.data.task_id.substring(0, 8)}...`)
           // 清空上传的文件和提示词
           uploadedFiles.value = []
           batchPrompt.value = ''
         } else {
-          ElMessage.error('创建批量任务失败: ' + response.data.error)
+          ElMessage.error('创建批量改图任务失败: ' + response.data.error)
         }
       } catch (error) {
-        console.error('批量生成错误:', error)
-        ElMessage.error('批量生成失败: ' + (error.response?.data?.error || error.message))
+        console.error('批量改图错误:', error)
+        ElMessage.error('批量改图失败: ' + (error.response?.data?.error || error.message))
       } finally {
         isBatchGenerating.value = false
       }
@@ -209,15 +343,24 @@ export default {
 
     return {
       uploadedFiles,
+      referenceImage,
+      referenceImageList,
+      imageCount,
       batchPrompt,
       isBatchGenerating,
       selectedApi,
       activeTab,
       selectedModel,
       availableModels,
+      isStartButtonDisabled,
       handleBatchFileChange,
+      handleReferenceImageChange,
+      handleReferenceImageRemove,
+      handleStartTask,
       handleBatchGenerate,
+      handleBatchEdit,
       clearAllImages,
+      clearReferenceImage,
       getApiTypeFromModel
     }
   }
@@ -484,6 +627,51 @@ html, body {
   flex: 1;
   background: white;
   padding: 20px 32px;
+}
+
+/* 批量生图相关样式 */
+.reference-upload {
+  width: 100%;
+}
+
+.reference-upload :deep(.el-upload) {
+  width: 148px;
+  height: 148px;
+  border: 1px dashed #dddddd;
+  border-radius: 6px;
+}
+
+.reference-upload :deep(.el-upload:hover) {
+  border-color: #04a864;
+}
+
+.reference-upload :deep(.el-upload-list__item) {
+  width: 148px;
+  height: 148px;
+  border-radius: 6px;
+}
+
+.count-selector {
+  width: 100%;
+}
+
+.count-selector :deep(.el-input-number__decrease),
+.count-selector :deep(.el-input-number__increase) {
+  background: white;
+  border: 1px solid #dddddd;
+}
+
+.count-selector :deep(.el-input__inner) {
+  border: 1px solid #dddddd;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.count-hint {
+  display: block;
+  font-size: 12px;
+  color: #999999;
+  margin-top: 8px;
 }
 
 /* 响应式设计 */
