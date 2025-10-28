@@ -91,11 +91,11 @@
                 <!-- 变量检测和输入 -->
                 <div v-if="detectedVariables.length > 0" class="form-group variable-section">
                   <div class="variable-header">
-                    <label class="form-label">✨ 检测到变量: {{ detectedVariables.map(v => `{${v}}`).join(', ') }}</label>
+                    <label class="form-label">✨ 检测到变量: <span v-for="(v, index) in detectedVariables" :key="v">{{ index > 0 ? ', ' : '' }}{{'{'}}{{ v }}{{'}'}} </span></label>
                   </div>
                   
                   <div v-for="varName in detectedVariables" :key="varName" class="variable-input-group">
-                    <label class="variable-label">{{'{'}}{{ varName }}{{'}'}}</label>
+                    <label class="variable-label">{{'{'}}{{ varName }}{{'}'}} </label>
                     <el-input
                       v-model="variableValues[varName]"
                       type="textarea"
