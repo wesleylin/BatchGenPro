@@ -459,6 +459,9 @@ export default {
         
       } catch (error) {
         console.error('批量生图错误:', error)
+        console.error('错误详情:', error.response?.data)
+        console.error('错误信息:', error.message)
+        console.error('请求URL:', error.config?.url)
         ElMessage.error('批量生图失败: ' + (error.response?.data?.error || error.message))
       } finally {
         isBatchGenerating.value = false
