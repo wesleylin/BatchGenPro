@@ -352,6 +352,11 @@ export default {
       return items
     }
 
+    // 设置本地任务（用于立即显示）
+    const setLocalTask = (localTask) => {
+      currentTask.value = localTask
+    }
+
     onMounted(() => {
       fetchLatestTask()
       // 每3秒刷新一次任务状态
@@ -379,7 +384,8 @@ export default {
       formatTime,
       getTaskPromptForItem,
       getItemStatus,
-      getTaskItems
+      getTaskItems,
+      setLocalTask
     }
   }
 }

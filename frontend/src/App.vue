@@ -158,7 +158,7 @@
         
         <!-- 右侧结果面板 -->
         <div class="right-panel">
-          <BatchTaskManager />
+          <BatchTaskManager ref="taskManagerRef" />
         </div>
       </div>
     </div>
@@ -183,6 +183,8 @@ export default {
     Plus
   },
   setup() {
+    const taskManagerRef = ref(null)
+    
     // 批量改图相关状态
     const uploadedFiles = ref([])
     
@@ -398,6 +400,27 @@ export default {
           console.log('将创建任务数:', actualCount)
           ElMessage.info(`检测到 ${limitedVariants.length} 个变量值，开始生成...`)
           
+          // 先创建本地任务对象，立即显示给用户
+          const localTaskId = 'local_' + Date.now()
+          const localTask = {
+            task_id: localTaskId,
+            status: 'processing',
+            total_images: limitedVariants.length,
+            processed_images: 0,
+            progress: 0,
+            items: limitedVariants.map((prompt, index) => ({
+              index: index,
+              prompt: prompt,
+              status: 'pending'
+            })),
+            reference_image_url: referenceImage.value ? URL.createObjectURL(referenceImage.value) : null
+          }
+          
+          // 立即设置本地任务，让UI显示出来
+          if (taskManagerRef.value && taskManagerRef.value.setLocalTask) {
+            taskManagerRef.value.setLocalTask(localTask)
+          }
+          
           // 使用新接口，一次性提交所有prompt
           const formData = new FormData()
           
@@ -518,6 +541,7 @@ export default {
     }
 
     return {
+      taskManagerRef,
       uploadedFiles,
       referenceImage,
       referenceImageList,
