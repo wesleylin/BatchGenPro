@@ -60,9 +60,9 @@
                   v-model="batchPrompt"
                   type="textarea"
                   :rows="3"
-                  placeholder="输入提示词，使用 {变量名} 来定义变量（仅支持一个变量），例如：生成一张{动物}的图片"
+                  :placeholder="activeTab === 'generate' ? '输入提示词，使用 {变量名} 来定义变量（仅支持一个变量），例如：生成一张{动物}的图片' : '输入提示词'"
                   class="prompt-input"
-                  @input="handlePromptChange"
+                  @input="activeTab === 'generate' ? handlePromptChange() : null"
                 />
               </div>
               
