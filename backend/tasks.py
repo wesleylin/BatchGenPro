@@ -416,11 +416,13 @@ def process_batch_generate_multi_prompt_sync(task_id, reference_image_data, prom
             generator = create_image_generator(api_type)
             result = generator.generate_image(reference_image_data, prompt)
             
-            # 添加文件名信息
+            # 添加文件名信息和prompt
             if result['success']:
                 result['filename'] = filename
             else:
                 result['filename'] = filename
+            
+            result['prompt'] = prompt  # 保存每个item的具体prompt
             
             results.append(result)
             

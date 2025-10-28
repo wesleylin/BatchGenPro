@@ -277,7 +277,10 @@ export default {
     // 获取任务中每个item的prompt（如果是批量生图带变量，可能需要展示不同的prompt）
     const getTaskPromptForItem = (index) => {
       if (!currentTask.value) return ''
-      // 暂时返回任务的prompt，后续如果需要显示每个item的具体prompt可以扩展
+      const items = getTaskItems()
+      if (items[index] && items[index].prompt) {
+        return items[index].prompt
+      }
       return currentTask.value.prompt || '无'
     }
 
@@ -302,7 +305,7 @@ export default {
           items.push({
             id: result.filename || `item_${index}`,
             status: getItemStatus(result),
-            prompt: currentTask.value.prompt,
+            prompt: result.prompt || currentTask.value.prompt,  // 优先使用result中的prompt
             generated_url: result.generated_url,
             filename: result.filename
           })
