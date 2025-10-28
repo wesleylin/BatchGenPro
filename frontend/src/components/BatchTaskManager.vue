@@ -97,7 +97,7 @@
     </div>
     
     <!-- 任务进行中但无结果 -->
-    <div v-else-if="currentTask && (!currentTask.results || !currentTask.results.generated_images || currentTask.results.generated_images.length === 0)" class="processing-state">
+    <div v-else-if="currentTask && !currentTask.items && (!currentTask.results || !currentTask.results.generated_images || currentTask.results.generated_images.length === 0)" class="processing-state">
       <div class="processing-info">
         <el-icon size="40" class="processing-icon"><Loading /></el-icon>
         <p class="processing-text">正在处理中...</p>
