@@ -199,7 +199,7 @@ export default {
     const batchPrompt = ref('')
     const isBatchGenerating = ref(false)
     const selectedApi = ref('gemini') // 默认使用Gemini
-    const activeTab = ref('edit') // 默认选中批量改图
+    const activeTab = ref('generate') // 默认选中批量生图
     const selectedModel = ref('gemini-2.5-flash-image') // 默认模型
     
     // 可用模型列表
@@ -393,8 +393,12 @@ export default {
         // 如果有变量，循环生成每个变量组合
         if (hasVariables.value) {
           console.log('变量模式，prompt变体:', promptVariants)
-          console.log('将创建任务数:', Math.min(promptVariants.length, 10))
+          const actualCount = Math.min(promptVariants.length, 10)
+          console.log('将创建任务数:', actualCount)
           ElMessage.info(`检测到 ${promptVariants.length} 个变量值，开始生成...`)
+          
+          // 先创建临时任务，立即显示所有任务项（避免逐条显示）
+          // 注意：这里只是为了让UI立即显示，实际任务仍通过API创建
           
           let successCount = 0
           for (let i = 0; i < Math.min(promptVariants.length, 10); i++) {
