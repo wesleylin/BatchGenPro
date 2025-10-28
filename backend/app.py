@@ -312,6 +312,82 @@ def create_batch_generate_task():
         app.logger.error(f"Create batch generate task error: {str(e)}")
         return jsonify({'success': False, 'error': f'创建任务失败: {str(e)}'}), 500
 
+@app.route('/api/batch/generate-with-prompts', methods=['POST'])
+def create_batch_generate_multi_prompt_task():
+    """创建批量生图任务（支持多个不同的prompt）"""
+    try:
+        import json
+        
+        # 获取prompts列表
+        prompts_str = request.form.get('prompts', '')
+        api_type = request.form.get('api_type', 'gemini')
+        
+        if not prompts_str:
+            return jsonify({'error': 'Prompts are required'}), 400
+        
+        try:
+            prompts = json.loads(prompts_str)
+        except:
+            return jsonify({'error': 'Invalid prompts format'}), 400
+        
+        if not isinstance(prompts, list) or len(prompts) == 0:
+            return jsonify({'error': 'Prompts must be a non-empty list'}), 400
+        
+        if len(prompts) > 10:
+            return jsonify({'error': 'Maximum 10 prompts allowed'}), 400
+        
+        if api_type not in SUPPORTED_APIS:
+            return jsonify({'error': f'Unsupported API type: {api_type}'}), 400
+        
+        # 参考图是可选的
+        reference_image_data = None
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename and allowed_file(file.filename):
+                # 保存参考图片
+                filename = secure_filename(file.filename)
+                file_id = str(uuid.uuid4())
+                new_filename = f"{file_id}_{filename}"
+                file_path = os.path.join(UPLOAD_FOLDER, new_filename)
+                file.save(file_path)
+                
+                # 读取参考图数据
+                with open(file_path, 'rb') as f:
+                    reference_image_data = f.read()
+        
+        # 创建虚拟的images_data用于任务管理
+        images_data = [{'filename': f'generated_{i+1}.png'} for i in range(len(prompts))]
+        
+        # 创建批量任务（使用第一个prompt作为任务prompt）
+        task_id, task_data = task_manager.create_task(images_data, prompts[0], api_type)
+        
+        # 更新任务状态为处理中
+        task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
+        
+        # 同步处理批量生图（使用多个prompt）
+        try:
+            from tasks import process_batch_generate_multi_prompt_sync
+            result = process_batch_generate_multi_prompt_sync(task_id, reference_image_data, prompts, api_type)
+            
+            if result['success']:
+                task_manager.update_task_status(task_id, TaskStatus.COMPLETED)
+            else:
+                task_manager.update_task_status(task_id, TaskStatus.FAILED)
+        except Exception as e:
+            app.logger.error(f"Batch generate multi-prompt processing error: {str(e)}")
+            task_manager.update_task_status(task_id, TaskStatus.FAILED)
+        
+        return jsonify({
+            'success': True,
+            'task_id': task_id,
+            'message': f'批量生图任务已创建，将生成{len(prompts)}张图片',
+            'task_data': task_data
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Create batch generate multi-prompt task error: {str(e)}")
+        return jsonify({'success': False, 'error': f'创建任务失败: {str(e)}'}), 500
+
 @app.route('/api/batch/tasks', methods=['GET'])
 def get_batch_tasks():
     """获取所有批量任务列表"""

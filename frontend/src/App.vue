@@ -390,48 +390,38 @@ export default {
           ElMessage.warning('生成数量超过10张，将只生成前10张')
         }
         
-        // 如果有变量，循环生成每个变量组合
+        // 如果有变量，使用新接口一次性提交所有prompt
         if (hasVariables.value) {
           console.log('变量模式，prompt变体:', promptVariants)
           const actualCount = Math.min(promptVariants.length, 10)
+          const limitedVariants = promptVariants.slice(0, actualCount)
           console.log('将创建任务数:', actualCount)
-          ElMessage.info(`检测到 ${promptVariants.length} 个变量值，开始生成...`)
+          ElMessage.info(`检测到 ${limitedVariants.length} 个变量值，开始生成...`)
           
-          // 先创建临时任务，立即显示所有任务项（避免逐条显示）
-          // 注意：这里只是为了让UI立即显示，实际任务仍通过API创建
+          // 使用新接口，一次性提交所有prompt
+          const formData = new FormData()
           
-          let successCount = 0
-          for (let i = 0; i < Math.min(promptVariants.length, 10); i++) {
-            console.log(`创建第 ${i + 1} 个任务，Prompt: "${promptVariants[i]}"`)
-            const formData = new FormData()
-            
-            // 添加参考图片（如果有）
-            if (referenceImage.value) {
-              formData.append('file', referenceImage.value)
-            }
-            
-            // 添加替换后的prompt
-            formData.append('prompt', promptVariants[i])
-            formData.append('image_count', 1)  // 每个变量组合生成1张
-            formData.append('api_type', getApiTypeFromModel(selectedModel.value))
-            
-            const response = await axios.post('/api/batch/generate-from-image', formData, {
-              headers: {
-                'Content-Type': 'multipart/form-data'
-              },
-              timeout: 180000
-            })
-            
-            if (response.data.success) {
-              successCount++
-              console.log(`第 ${i + 1} 个任务创建成功`)
-            } else {
-              console.error(`第 ${i + 1} 个任务创建失败:`, response.data.error)
-              ElMessage.error(`第 ${i + 1} 个任务创建失败: ` + response.data.error)
-            }
+          // 添加参考图片（如果有）
+          if (referenceImage.value) {
+            formData.append('file', referenceImage.value)
           }
           
-          ElMessage.success(`已成功创建 ${successCount} 个批量生图任务！`)
+          // 添加所有prompt（JSON格式）
+          formData.append('prompts', JSON.stringify(limitedVariants))
+          formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+          
+          const response = await axios.post('/api/batch/generate-with-prompts', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            },
+            timeout: 180000
+          })
+          
+          if (response.data.success) {
+            ElMessage.success(`批量生图任务已创建！将生成${limitedVariants.length}张图片`)
+          } else {
+            ElMessage.error('创建批量生图任务失败: ' + response.data.error)
+          }
         } else {
           // 无变量，使用原有逻辑
           const formData = new FormData()

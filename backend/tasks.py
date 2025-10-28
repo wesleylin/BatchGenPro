@@ -383,3 +383,64 @@ def process_batch_generate_sync(task_id, reference_image_data, prompt, image_cou
             'success': False,
             'error': str(e)
         }
+
+def process_batch_generate_multi_prompt_sync(task_id, reference_image_data, prompts, api_type="gemini"):
+    """
+    批量生图：使用同一张参考图，但每个prompt生成一张图片（用于变量功能）
+    
+    Args:
+        task_id: 任务ID
+        reference_image_data: 参考图片的二进制数据（可选）
+        prompts: 提示词列表
+        api_type: API类型 ("gemini" 或 "doubao")
+    
+    Returns:
+        dict: 批量任务结果
+    """
+    try:
+        from task_manager import task_manager
+        
+        results = []
+        total_images = len(prompts)
+        
+        for i, prompt in enumerate(prompts):
+            # 更新进度
+            progress = (i / total_images) * 100
+            task_manager.update_task_progress(task_id, progress, i + 1)
+            
+            # 生成文件名
+            filename = f"generated_{i+1}.png"
+            
+            # 使用统一的API生成器
+            from ai_image_generator import create_image_generator
+            generator = create_image_generator(api_type)
+            result = generator.generate_image(reference_image_data, prompt)
+            
+            # 添加文件名信息
+            if result['success']:
+                result['filename'] = filename
+            else:
+                result['filename'] = filename
+            
+            results.append(result)
+            
+            # 更新任务结果
+            task_manager.add_task_result(task_id, filename, result)
+            
+            # 短暂延迟，避免API限制
+            time.sleep(1)
+        
+        return {
+            'success': True,
+            'task_id': task_id,
+            'results': results,
+            'total_images': total_images,
+            'completed_images': len(results)
+        }
+        
+    except Exception as e:
+        print(f"Error processing batch generate multi-prompt sync: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
