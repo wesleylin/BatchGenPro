@@ -60,8 +60,9 @@
                   v-model="batchPrompt"
                   type="textarea"
                   :rows="3"
-                  placeholder="输入提示词"
+                  placeholder="输入提示词，使用 {变量名} 来定义变量，例如：生成一张{动物}的图片"
                   class="prompt-input"
+                  @input="handlePromptChange"
                 />
               </div>
               
@@ -87,6 +88,26 @@
                   </el-upload>
                 </div>
                 
+                <!-- 变量检测和输入 -->
+                <div v-if="detectedVariables.length > 0" class="form-group variable-section">
+                  <div class="variable-header">
+                    <label class="form-label">✨ 检测到变量: {{ detectedVariables.map(v => `{${v}}`).join(', ') }}</label>
+                  </div>
+                  
+                  <div v-for="varName in detectedVariables" :key="varName" class="variable-input-group">
+                    <label class="variable-label">{{'{'}}{{ varName }}{{'}'}}</label>
+                    <el-input
+                      v-model="variableValues[varName]"
+                      type="textarea"
+                      :rows="3"
+                      :placeholder="`每行一个值，例如：\n鸭子\n兔子\n老虎`"
+                      class="variable-textarea"
+                      @input="updateVariableCount"
+                    />
+                    <span class="variable-count">{{ getVariableValueCount(varName) }} 个值</span>
+                  </div>
+                </div>
+                
                 <div class="form-group">
                   <label class="form-label">生成数量</label>
                   <el-input-number 
@@ -94,8 +115,10 @@
                     :min="1" 
                     :max="10" 
                     class="count-selector"
+                    :disabled="hasVariables"
                   />
-                  <span class="count-hint">最多生成10张</span>
+                  <span class="count-hint" v-if="!hasVariables">最多生成10张</span>
+                  <span class="count-hint" v-else>使用变量时，数量由变量值决定（当前: {{ totalVariableCombinations }} 个）</span>
                 </div>
               </template>
               
@@ -168,6 +191,10 @@ export default {
     const referenceImageList = ref([])
     const imageCount = ref(3) // 默认生成3张
     
+    // 变量功能相关状态
+    const detectedVariables = ref([])  // 检测到的变量名列表
+    const variableValues = ref({})     // 变量值对象 { "动物": "鸭子\n兔子\n老虎" }
+    
     // 通用状态
     const batchPrompt = ref('')
     const isBatchGenerating = ref(false)
@@ -234,6 +261,129 @@ export default {
       return 'gemini' // 默认
     }
 
+    // 变量相关函数
+    // 检测Prompt中的变量
+    const detectVariables = (prompt) => {
+      const regex = /\{([^}]+)\}/g
+      const matches = [...prompt.matchAll(regex)]
+      const vars = matches.map(m => m[1].trim())
+      return [...new Set(vars)]  // 去重
+    }
+
+    // 监听Prompt变化，自动检测变量
+    const handlePromptChange = () => {
+      if (activeTab.value === 'generate') {
+        const vars = detectVariables(batchPrompt.value)
+        detectedVariables.value = vars
+        
+        // 为新检测到的变量初始化空值
+        vars.forEach(varName => {
+          if (!variableValues.value[varName]) {
+            variableValues.value[varName] = ''
+          }
+        })
+        
+        // 移除不再存在的变量
+        Object.keys(variableValues.value).forEach(key => {
+          if (!vars.includes(key)) {
+            delete variableValues.value[key]
+          }
+        })
+      }
+    }
+
+    // 获取变量值列表（按行分割）
+    const getVariableValuesList = (varName) => {
+      const text = variableValues.value[varName] || ''
+      return text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+    }
+
+    // 获取变量值数量
+    const getVariableValueCount = (varName) => {
+      return getVariableValuesList(varName).length
+    }
+
+    // 更新变量数量（用于实时显示）
+    const updateVariableCount = () => {
+      // 触发视图更新
+    }
+
+    // 计算总的生成数量（变量组合）
+    const totalVariableCombinations = computed(() => {
+      if (detectedVariables.value.length === 0) {
+        return imageCount.value
+      }
+      
+      // 计算所有变量值的笛卡尔积数量
+      let total = 1
+      detectedVariables.value.forEach(varName => {
+        const count = getVariableValueCount(varName)
+        if (count > 0) {
+          total *= count
+        }
+      })
+      return Math.min(total, 10)  // 最多10个
+    })
+
+    // 是否有变量
+    const hasVariables = computed(() => {
+      return detectedVariables.value.length > 0 && 
+             detectedVariables.value.some(v => getVariableValueCount(v) > 0)
+    })
+
+    // 生成所有变量组合的Prompt列表
+    const generatePromptVariants = () => {
+      if (detectedVariables.value.length === 0) {
+        return [batchPrompt.value]
+      }
+      
+      // 获取所有变量的值列表
+      const varValuesList = {}
+      detectedVariables.value.forEach(varName => {
+        varValuesList[varName] = getVariableValuesList(varName)
+      })
+      
+      // 如果任何变量没有值，返回原始prompt
+      if (Object.values(varValuesList).some(list => list.length === 0)) {
+        return [batchPrompt.value]
+      }
+      
+      // 生成笛卡尔积
+      const cartesianProduct = (obj) => {
+        const keys = Object.keys(obj)
+        const values = keys.map(key => obj[key])
+        
+        const result = []
+        const generate = (current, depth) => {
+          if (depth === keys.length) {
+            result.push({...current})
+            return
+          }
+          
+          values[depth].forEach(value => {
+            current[keys[depth]] = value
+            generate(current, depth + 1)
+          })
+        }
+        
+        generate({}, 0)
+        return result
+      }
+      
+      const combinations = cartesianProduct(varValuesList)
+      
+      // 替换变量生成prompt列表
+      return combinations.map(combo => {
+        let prompt = batchPrompt.value
+        Object.entries(combo).forEach(([key, value]) => {
+          prompt = prompt.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+        })
+        return prompt
+      }).slice(0, 10)  // 最多10个
+    }
+
     // 统一的开始任务处理
     const handleStartTask = async () => {
       if (activeTab.value === 'generate') {
@@ -250,37 +400,92 @@ export default {
         return
       }
 
+      // 检查变量是否都有值
+      if (hasVariables.value) {
+        for (const varName of detectedVariables.value) {
+          if (getVariableValueCount(varName) === 0) {
+            ElMessage.warning(`请为变量 {${varName}} 输入至少一个值`)
+            return
+          }
+        }
+      }
+
       isBatchGenerating.value = true
       
       try {
-        const formData = new FormData()
+        // 生成所有变量组合的prompt
+        const promptVariants = generatePromptVariants()
+        const actualCount = hasVariables.value ? promptVariants.length : imageCount.value
         
-        // 添加参考图片（如果有）
-        if (referenceImage.value) {
-          formData.append('file', referenceImage.value)
+        if (actualCount > 10) {
+          ElMessage.warning('生成数量超过10张，将只生成前10张')
         }
         
-        // 添加提示词、数量和API类型
-        formData.append('prompt', batchPrompt.value)
-        formData.append('image_count', imageCount.value)
-        formData.append('api_type', getApiTypeFromModel(selectedModel.value))
-        
-        const response = await axios.post('/api/batch/generate-from-image', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          },
-          timeout: 180000  // 增加到3分钟
-        })
-        
-        if (response.data.success) {
-          ElMessage.success(`批量生图任务已创建！将生成${imageCount.value}张图片`)
-          // 清空参考图和提示词
-          referenceImage.value = null
-          referenceImageList.value = []
-          batchPrompt.value = ''
+        // 如果有变量，循环生成每个变量组合
+        if (hasVariables.value) {
+          ElMessage.info(`检测到 ${promptVariants.length} 个变量组合，开始生成...`)
+          
+          for (let i = 0; i < Math.min(promptVariants.length, 10); i++) {
+            const formData = new FormData()
+            
+            // 添加参考图片（如果有）
+            if (referenceImage.value) {
+              formData.append('file', referenceImage.value)
+            }
+            
+            // 添加替换后的prompt
+            formData.append('prompt', promptVariants[i])
+            formData.append('image_count', 1)  // 每个变量组合生成1张
+            formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+            
+            const response = await axios.post('/api/batch/generate-from-image', formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data'
+              },
+              timeout: 180000
+            })
+            
+            if (!response.data.success) {
+              ElMessage.error(`第 ${i + 1} 个任务创建失败: ` + response.data.error)
+            }
+          }
+          
+          ElMessage.success(`已创建 ${Math.min(promptVariants.length, 10)} 个批量生图任务！`)
         } else {
-          ElMessage.error('创建批量生图任务失败: ' + response.data.error)
+          // 无变量，使用原有逻辑
+          const formData = new FormData()
+          
+          // 添加参考图片（如果有）
+          if (referenceImage.value) {
+            formData.append('file', referenceImage.value)
+          }
+          
+          // 添加提示词、数量和API类型
+          formData.append('prompt', batchPrompt.value)
+          formData.append('image_count', imageCount.value)
+          formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+          
+          const response = await axios.post('/api/batch/generate-from-image', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            },
+            timeout: 180000
+          })
+          
+          if (response.data.success) {
+            ElMessage.success(`批量生图任务已创建！将生成${imageCount.value}张图片`)
+          } else {
+            ElMessage.error('创建批量生图任务失败: ' + response.data.error)
+          }
         }
+        
+        // 清空参考图和提示词
+        referenceImage.value = null
+        referenceImageList.value = []
+        batchPrompt.value = ''
+        detectedVariables.value = []
+        variableValues.value = {}
+        
       } catch (error) {
         console.error('批量生图错误:', error)
         ElMessage.error('批量生图失败: ' + (error.response?.data?.error || error.message))
@@ -358,7 +563,15 @@ export default {
       handleBatchEdit,
       clearAllImages,
       clearReferenceImage,
-      getApiTypeFromModel
+      getApiTypeFromModel,
+      // 变量相关
+      detectedVariables,
+      variableValues,
+      handlePromptChange,
+      getVariableValueCount,
+      updateVariableCount,
+      totalVariableCombinations,
+      hasVariables
     }
   }
 }
@@ -669,6 +882,67 @@ html, body {
   font-size: 12px;
   color: #999999;
   margin-top: 8px;
+}
+
+/* 变量功能样式 */
+.variable-section {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.variable-header {
+  margin-bottom: 12px;
+}
+
+.variable-header .form-label {
+  color: #04a864;
+  font-weight: 600;
+}
+
+.variable-input-group {
+  margin-bottom: 16px;
+}
+
+.variable-input-group:last-child {
+  margin-bottom: 0;
+}
+
+.variable-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 8px;
+  font-family: 'Courier New', monospace;
+}
+
+.variable-textarea {
+  width: 100%;
+}
+
+.variable-textarea :deep(.el-textarea__inner) {
+  border: 1px solid #dddddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #333333;
+  background: white;
+  line-height: 1.6;
+}
+
+.variable-textarea :deep(.el-textarea__inner)::placeholder {
+  color: #bbbbbb;
+}
+
+.variable-count {
+  display: block;
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 6px;
+  font-style: italic;
 }
 
 /* 响应式设计 */
