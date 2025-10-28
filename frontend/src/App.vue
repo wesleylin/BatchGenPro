@@ -417,6 +417,10 @@ export default {
         const promptVariants = generatePromptVariants()
         const actualCount = hasVariables.value ? promptVariants.length : imageCount.value
         
+        console.log('变量组合列表:', promptVariants)
+        console.log('是否有变量:', hasVariables.value)
+        console.log('将要生成的数量:', actualCount)
+        
         if (actualCount > 10) {
           ElMessage.warning('生成数量超过10张，将只生成前10张')
         }
@@ -426,6 +430,7 @@ export default {
           ElMessage.info(`检测到 ${promptVariants.length} 个变量组合，开始生成...`)
           
           for (let i = 0; i < Math.min(promptVariants.length, 10); i++) {
+            console.log(`创建第 ${i + 1} 个任务，Prompt: ${promptVariants[i]}`)
             const formData = new FormData()
             
             // 添加参考图片（如果有）
