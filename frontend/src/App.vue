@@ -60,7 +60,7 @@
                   v-model="batchPrompt"
                   type="textarea"
                   :rows="3"
-                  placeholder="输入提示词，使用 {变量名} 来定义变量，例如：生成一张{动物}的图片"
+                  placeholder="输入提示词，使用 {变量名} 来定义变量（仅支持一个变量），例如：生成一张{动物}的图片"
                   class="prompt-input"
                   @input="handlePromptChange"
                 />
@@ -91,20 +91,20 @@
                 <!-- 变量检测和输入 -->
                 <div v-if="detectedVariables.length > 0" class="form-group variable-section">
                   <div class="variable-header">
-                    <label class="form-label">✨ 检测到变量: <span v-for="(v, index) in detectedVariables" :key="v">{{ index > 0 ? ', ' : '' }}{{'{'}}{{ v }}{{'}'}} </span></label>
+                    <label class="form-label">✨ 检测到变量: {{'{'}}{{ detectedVariables[0] }}{{'}'}}</label>
                   </div>
                   
-                  <div v-for="varName in detectedVariables" :key="varName" class="variable-input-group">
-                    <label class="variable-label">{{'{'}}{{ varName }}{{'}'}} </label>
+                  <div class="variable-input-group">
+                    <label class="variable-label">{{'{'}}{{ detectedVariables[0] }}{{'}'}}</label>
                     <el-input
-                      v-model="variableValues[varName]"
+                      v-model="variableValues[detectedVariables[0]]"
                       type="textarea"
                       :rows="3"
                       :placeholder="`每行一个值，例如：\n鸭子\n兔子\n老虎`"
                       class="variable-textarea"
                       @input="updateVariableCount"
                     />
-                    <span class="variable-count">{{ getVariableValueCount(varName) }} 个值</span>
+                    <span class="variable-count">{{ getVariableValueCount(detectedVariables[0]) }} 个值</span>
                   </div>
                 </div>
                 
@@ -274,10 +274,11 @@ export default {
     const handlePromptChange = () => {
       if (activeTab.value === 'generate') {
         const vars = detectVariables(batchPrompt.value)
-        detectedVariables.value = vars
+        // 只支持一个变量，取第一个
+        detectedVariables.value = vars.length > 0 ? [vars[0]] : []
         
         // 为新检测到的变量初始化空值
-        vars.forEach(varName => {
+        detectedVariables.value.forEach(varName => {
           if (!variableValues.value[varName]) {
             variableValues.value[varName] = ''
           }
@@ -285,7 +286,7 @@ export default {
         
         // 移除不再存在的变量
         Object.keys(variableValues.value).forEach(key => {
-          if (!vars.includes(key)) {
+          if (!detectedVariables.value.includes(key)) {
             delete variableValues.value[key]
           }
         })
@@ -316,15 +317,10 @@ export default {
         return imageCount.value
       }
       
-      // 计算所有变量值的笛卡尔积数量
-      let total = 1
-      detectedVariables.value.forEach(varName => {
-        const count = getVariableValueCount(varName)
-        if (count > 0) {
-          total *= count
-        }
-      })
-      return Math.min(total, 10)  // 最多10个
+      // 只支持单变量，直接返回第一个变量的值数量
+      const varName = detectedVariables.value[0]
+      const count = getVariableValueCount(varName)
+      return Math.min(count, 10)  // 最多10个
     })
 
     // 是否有变量
@@ -339,49 +335,22 @@ export default {
         return [batchPrompt.value]
       }
       
-      // 获取所有变量的值列表
-      const varValuesList = {}
-      detectedVariables.value.forEach(varName => {
-        varValuesList[varName] = getVariableValuesList(varName)
-      })
+      // 只支持单变量
+      const varName = detectedVariables.value[0]
+      const values = getVariableValuesList(varName)
       
-      // 如果任何变量没有值，返回原始prompt
-      if (Object.values(varValuesList).some(list => list.length === 0)) {
+      // 如果变量没有值，返回原始prompt
+      if (values.length === 0) {
         return [batchPrompt.value]
       }
       
-      // 生成笛卡尔积
-      const cartesianProduct = (obj) => {
-        const keys = Object.keys(obj)
-        const values = keys.map(key => obj[key])
-        
-        const result = []
-        const generate = (current, depth) => {
-          if (depth === keys.length) {
-            result.push({...current})
-            return
-          }
-          
-          values[depth].forEach(value => {
-            current[keys[depth]] = value
-            generate(current, depth + 1)
-          })
-        }
-        
-        generate({}, 0)
-        return result
-      }
-      
-      const combinations = cartesianProduct(varValuesList)
-      
       // 替换变量生成prompt列表
-      return combinations.map(combo => {
-        let prompt = batchPrompt.value
-        Object.entries(combo).forEach(([key, value]) => {
-          prompt = prompt.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
-        })
-        return prompt
+      const prompts = values.map(value => {
+        return batchPrompt.value.replace(new RegExp(`\\{${varName}\\}`, 'g'), value)
       }).slice(0, 10)  // 最多10个
+      
+      console.log('生成的prompt列表:', prompts)
+      return prompts
     }
 
     // 统一的开始任务处理
@@ -417,20 +386,19 @@ export default {
         const promptVariants = generatePromptVariants()
         const actualCount = hasVariables.value ? promptVariants.length : imageCount.value
         
-        console.log('变量组合列表:', promptVariants)
-        console.log('是否有变量:', hasVariables.value)
-        console.log('将要生成的数量:', actualCount)
-        
         if (actualCount > 10) {
           ElMessage.warning('生成数量超过10张，将只生成前10张')
         }
         
         // 如果有变量，循环生成每个变量组合
         if (hasVariables.value) {
-          ElMessage.info(`检测到 ${promptVariants.length} 个变量组合，开始生成...`)
+          console.log('变量模式，prompt变体:', promptVariants)
+          console.log('将创建任务数:', Math.min(promptVariants.length, 10))
+          ElMessage.info(`检测到 ${promptVariants.length} 个变量值，开始生成...`)
           
+          let successCount = 0
           for (let i = 0; i < Math.min(promptVariants.length, 10); i++) {
-            console.log(`创建第 ${i + 1} 个任务，Prompt: ${promptVariants[i]}`)
+            console.log(`创建第 ${i + 1} 个任务，Prompt: "${promptVariants[i]}"`)
             const formData = new FormData()
             
             // 添加参考图片（如果有）
@@ -450,12 +418,16 @@ export default {
               timeout: 180000
             })
             
-            if (!response.data.success) {
+            if (response.data.success) {
+              successCount++
+              console.log(`第 ${i + 1} 个任务创建成功`)
+            } else {
+              console.error(`第 ${i + 1} 个任务创建失败:`, response.data.error)
               ElMessage.error(`第 ${i + 1} 个任务创建失败: ` + response.data.error)
             }
           }
           
-          ElMessage.success(`已创建 ${Math.min(promptVariants.length, 10)} 个批量生图任务！`)
+          ElMessage.success(`已成功创建 ${successCount} 个批量生图任务！`)
         } else {
           // 无变量，使用原有逻辑
           const formData = new FormData()
