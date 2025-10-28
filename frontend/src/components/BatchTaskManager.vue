@@ -23,10 +23,10 @@
     </div>
     
     <!-- 任务列表 -->
-    <div v-if="currentTask && currentTask.results && currentTask.results.generated_images" class="task-list">
+    <div v-if="currentTask && getTaskItems().length > 0" class="task-list">
       <div 
-        v-for="(result, index) in currentTask.results.generated_images" 
-        :key="index" 
+        v-for="(item, index) in getTaskItems()" 
+        :key="item.id || index" 
         class="task-item"
       >
         <!-- 任务信息栏 -->
@@ -35,8 +35,8 @@
             <span class="task-number">#{{ index + 1 }}</span>
             <span class="task-prompt">{{ getTaskPromptForItem(index) }}</span>
           </div>
-          <el-tag :type="getStatusTagType(getItemStatus(result))" size="small" class="task-status-tag">
-            {{ getStatusText(getItemStatus(result)) }}
+          <el-tag :type="getStatusTagType(item.status)" size="small" class="task-status-tag">
+            {{ getStatusText(item.status) }}
           </el-tag>
         </div>
         
@@ -56,9 +56,9 @@
         <div class="result-section">
           <span class="result-label">生成结果：</span>
           <el-image
-            v-if="result.generated_url"
-            :src="result.generated_url"
-            :preview-src-list="[result.generated_url]"
+            v-if="item.generated_url"
+            :src="item.generated_url"
+            :preview-src-list="[item.generated_url]"
             fit="cover"
             class="generated-image"
             lazy
@@ -71,15 +71,15 @@
           </el-image>
           <div v-else class="image-placeholder">
             <el-icon><Loading /></el-icon>
-            <span>处理中...</span>
+            <span>{{ item.status === 'pending' ? '待开始' : item.status === 'processing' ? '生成中...' : '无图片' }}</span>
           </div>
         </div>
         
         <!-- 下载按钮 -->
-        <div v-if="result.generated_url" class="task-actions">
+        <div v-if="item.generated_url" class="task-actions">
           <el-button 
             size="small" 
-            @click="downloadSingleImage(result.generated_url, result.filename)"
+            @click="downloadSingleImage(item.generated_url, item.filename)"
             icon="Download"
           >
             下载
@@ -253,10 +253,10 @@ export default {
     // 获取状态文本
     const getStatusText = (status) => {
       switch (status) {
-        case 'pending': return '等待中'
-        case 'processing': return '处理中'
+        case 'pending': return '未开始'
+        case 'processing': return '生成中'
         case 'completed': return '已完成'
-        case 'failed': return '失败'
+        case 'failed': return '生成失败'
         case 'cancelled': return '已取消'
         default: return '未知'
       }
@@ -289,6 +289,40 @@ export default {
       return 'processing'
     }
 
+    // 获取任务列表项（统一格式）
+    const getTaskItems = () => {
+      if (!currentTask.value) return []
+      
+      const items = []
+      const total = currentTask.value.total_images || 0
+      
+      // 如果有results.generated_images，使用它
+      if (currentTask.value.results && currentTask.value.results.generated_images) {
+        currentTask.value.results.generated_images.forEach((result, index) => {
+          items.push({
+            id: result.filename || `item_${index}`,
+            status: getItemStatus(result),
+            prompt: currentTask.value.prompt,
+            generated_url: result.generated_url,
+            filename: result.filename
+          })
+        })
+      } else {
+        // 否则根据total_images创建空项
+        for (let i = 0; i < total; i++) {
+          items.push({
+            id: `item_${i}`,
+            status: 'pending',
+            prompt: currentTask.value.prompt,
+            generated_url: null,
+            filename: null
+          })
+        }
+      }
+      
+      return items
+    }
+
     onMounted(() => {
       fetchLatestTask()
       // 每3秒刷新一次任务状态
@@ -315,7 +349,8 @@ export default {
       getTaskStatusClass,
       formatTime,
       getTaskPromptForItem,
-      getItemStatus
+      getItemStatus,
+      getTaskItems
     }
   }
 }
