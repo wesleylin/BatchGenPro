@@ -361,6 +361,15 @@ def create_batch_generate_multi_prompt_task():
         # 创建批量任务（使用第一个prompt作为任务prompt）
         task_id, task_data = task_manager.create_task(images_data, prompts[0], api_type)
         
+        # 立即添加每个item的prompt信息，让前端能够显示
+        task_data['items'] = []
+        for i, prompt in enumerate(prompts):
+            task_data['items'].append({
+                'index': i,
+                'prompt': prompt,
+                'status': 'pending'
+            })
+        
         # 更新任务状态为处理中
         task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
         

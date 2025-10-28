@@ -299,6 +299,32 @@ export default {
       const items = []
       const total = currentTask.value.total_images || 0
       
+      // 优先使用task_data中的items字段（多prompt模式）
+      if (currentTask.value.items && currentTask.value.items.length > 0) {
+        currentTask.value.items.forEach((item) => {
+          items.push({
+            id: `item_${item.index}`,
+            status: 'pending',
+            prompt: item.prompt,
+            generated_url: null,
+            filename: null
+          })
+        })
+        
+        // 如果有results，合并结果
+        if (currentTask.value.results && currentTask.value.results.generated_images) {
+          currentTask.value.results.generated_images.forEach((result, index) => {
+            if (items[index]) {
+              items[index].status = getItemStatus(result)
+              items[index].generated_url = result.generated_url
+              items[index].filename = result.filename
+            }
+          })
+        }
+        
+        return items
+      }
+      
       // 如果有results.generated_images，使用它
       if (currentTask.value.results && currentTask.value.results.generated_images) {
         currentTask.value.results.generated_images.forEach((result, index) => {
