@@ -423,12 +423,14 @@ export default {
           ElMessage.info(`检测到 ${limitedVariants.length} 个变量值，开始生成...`)
           
           // 先创建本地任务对象，立即显示给用户
+          const referenceImageUrl = referenceImage.value ? URL.createObjectURL(referenceImage.value) : null
           const items = limitedVariants.map((prompt, index) => ({
             index: index,
             prompt: prompt,
-            status: 'pending'
+            status: 'pending',
+            reference_image_url: referenceImageUrl  // 所有item共享一个参考图
           }))
-          createAndSetLocalTask(items, referenceImage.value ? URL.createObjectURL(referenceImage.value) : null)
+          createAndSetLocalTask(items, null)
           
           // 使用新接口，一次性提交所有prompt
           const formData = new FormData()
@@ -461,12 +463,14 @@ export default {
         } else {
           // 无变量，使用原有逻辑
           // 先创建本地任务对象，立即显示给用户
+          const referenceImageUrl = referenceImage.value ? URL.createObjectURL(referenceImage.value) : null
           const items = Array.from({length: imageCount.value}, (_, index) => ({
             index: index,
             prompt: batchPrompt.value,
-            status: 'pending'
+            status: 'pending',
+            reference_image_url: referenceImageUrl  // 所有item共享一个参考图
           }))
-          createAndSetLocalTask(items, referenceImage.value ? URL.createObjectURL(referenceImage.value) : null)
+          createAndSetLocalTask(items, null)
           
           const formData = new FormData()
           

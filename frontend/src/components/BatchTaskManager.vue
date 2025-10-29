@@ -41,11 +41,11 @@
         </div>
         
         <!-- 参考图（如果有） -->
-        <div v-if="item.reference_image_url || currentTask.reference_image_url" class="reference-section">
+        <div v-if="item.reference_image_url" class="reference-section">
           <span class="reference-label">参考图：</span>
           <el-image
-            :src="item.reference_image_url || currentTask.reference_image_url"
-            :preview-src-list="[item.reference_image_url || currentTask.reference_image_url]"
+            :src="item.reference_image_url"
+            :preview-src-list="[item.reference_image_url]"
             fit="cover"
             class="reference-image"
             lazy
@@ -350,7 +350,8 @@ export default {
             status: 'pending',
             prompt: item.prompt,
             generated_url: null,
-            filename: null
+            filename: null,
+            reference_image_url: item.reference_image_url || null  // 保留每个item的参考图
           })
         })
         
