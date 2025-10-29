@@ -137,20 +137,43 @@ export default {
     // 获取最新任务
     const fetchLatestTask = async () => {
       try {
-        isLoadingTasks.value = true
+        // 只有在没有当前任务时才显示loading
+        if (!currentTask.value) {
+          isLoadingTasks.value = true
+        }
         const response = await axios.get('/api/batch/tasks')
         
         if (response.data.success && response.data.tasks && response.data.tasks.length > 0) {
           const latestTask = response.data.tasks[0]
           
-          // 如果当前有local task，且后端返回的任务ID匹配，则合并更新（保留items结构）
+          // 如果当前有local task，且后端返回的任务ID匹配，则只更新必要字段（避免重新渲染）
           if (currentTask.value && currentTask.value.items && 
               currentTask.value.task_id && currentTask.value.task_id === latestTask.task_id) {
-            // 合并后端数据到本地任务，保留items结构
-            currentTask.value = {
-              ...currentTask.value,
-              ...latestTask,
-              items: currentTask.value.items  // 保留原有的items
+            // 只更新状态和进度，保留items和reference_image_url
+            currentTask.value.status = latestTask.status
+            currentTask.value.progress = latestTask.progress
+            currentTask.value.processed_images = latestTask.processed_images
+            currentTask.value.updated_at = latestTask.updated_at
+            
+            // 更新results，但不覆盖items
+            if (latestTask.results) {
+              currentTask.value.results = latestTask.results
+              
+              // 更新items中的状态和图片URL
+              if (latestTask.results.generated_images) {
+                latestTask.results.generated_images.forEach((result, index) => {
+                  if (currentTask.value.items[index]) {
+                    currentTask.value.items[index].status = getItemStatus(result)
+                    if (result.generated_url) {
+                      currentTask.value.items[index].generated_url = result.generated_url
+                    }
+                    if (result.filename) {
+                      currentTask.value.items[index].filename = result.filename
+                    }
+                    // 保留原有的prompt
+                  }
+                })
+              }
             }
           } else {
             // 首次加载或task_id不匹配，直接使用后端返回的任务
