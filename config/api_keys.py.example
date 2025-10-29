@@ -1,0 +1,23 @@
+# API配置
+# 复制此文件为 api_keys.py 并填入实际的 API 密钥
+
+GEMINI_API_KEY = "your_gemini_api_key_here"
+GEMINI_MODEL = "gemini-2.5-flash-image"
+
+# 豆包API配置
+DOUBAO_API_KEY = "your_doubao_api_key_here"
+DOUBAO_MODEL = "doubao-seedream-4-0-250828"
+DOUBAO_WATERMARK = False  # 是否添加水印，False=不添加，True=添加"AI生成"水印
+
+# 文件存储配置
+UPLOAD_FOLDER = "uploads"
+RESULT_FOLDER = "results"
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# 允许的文件类型
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+# API选择配置
+DEFAULT_API = "gemini"  # 默认使用Gemini
+SUPPORTED_APIS = ["gemini", "doubao"]
+
