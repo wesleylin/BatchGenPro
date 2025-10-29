@@ -370,8 +370,8 @@ def create_batch_generate_multi_prompt_task():
                 'status': 'pending'
             })
         
-        # 更新任务状态为处理中
-        task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
+        # 保存items到Redis
+        task_manager.update_task_status(task_id, TaskStatus.PROCESSING, items=task_data['items'])
         
         # 同步处理批量生图（使用多个prompt）
         try:
