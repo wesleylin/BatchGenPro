@@ -285,8 +285,17 @@ def create_batch_generate_task():
         # 创建批量任务
         task_id, task_data = task_manager.create_task(images_data, prompt, api_type)
         
-        # 更新任务状态为处理中
-        task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
+        # 添加items字段，让前端能够显示所有任务项
+        task_data['items'] = []
+        for i in range(image_count):
+            task_data['items'].append({
+                'index': i,
+                'prompt': prompt,
+                'status': 'pending'
+            })
+        
+        # 更新任务状态为处理中，并保存items
+        task_manager.update_task_status(task_id, TaskStatus.PROCESSING, items=task_data['items'])
         
         # 同步处理批量生图
         try:
