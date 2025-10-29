@@ -7,13 +7,22 @@
         <span v-if="currentTask" class="task-progress">{{ getTaskProgress() }}</span>
       </div>
       <el-button 
-        v-if="currentTask && currentTask.status === 'completed'" 
+        v-if="currentTask && (currentTask.status === 'completed' || (currentTask.status === 'cancelled' && currentTask.results && currentTask.results.generated_images && currentTask.results.generated_images.length > 0))" 
         @click="downloadResults(currentTask)" 
         type="primary" 
         size="small"
         class="download-all-btn"
       >
         下载全部
+      </el-button>
+      <el-button 
+        v-if="currentTask && (currentTask.status === 'processing' || currentTask.status === 'pending')" 
+        @click="cancelTask(currentTask.task_id)" 
+        type="danger" 
+        size="small"
+        class="cancel-btn"
+      >
+        取消任务
       </el-button>
     </div>
     
@@ -493,6 +502,19 @@ export default {
 
 .download-all-btn:hover {
   background: #038a56;
+}
+
+.cancel-btn {
+  background: #f56c6c;
+  border: 1px solid #dddddd;
+  border-radius: 6px;
+  font-size: 14px;
+  color: white;
+  padding: 5px 16px;
+}
+
+.cancel-btn:hover {
+  background: #e63939;
 }
 
 /* 进度条 */

@@ -502,12 +502,7 @@ export default {
           }
         }
         
-        // 清空参考图和提示词
-        referenceImage.value = null
-        referenceImageList.value = []
-        batchPrompt.value = ''
-        detectedVariables.value = []
-        variableValues.value = {}
+        // 不清空参考图和提示词，让用户可以继续使用或修改
         
       } catch (error) {
         console.error('批量生图错误:', error)
@@ -568,9 +563,7 @@ export default {
             taskManagerRef.value.updateLocalTaskId(response.data.task_id)
           }
           // 不显示消息，任务结果会在任务列表中显示
-          // 清空上传的文件和提示词
-          uploadedFiles.value = []
-          batchPrompt.value = ''
+          // 不清空上传的文件和提示词，让用户可以继续使用或修改
         } else {
           ElMessage.error('创建批量改图任务失败: ' + response.data.error)
         }
