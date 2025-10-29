@@ -129,11 +129,14 @@ class BatchTaskManager:
                         image["status"] = TaskStatus.COMPLETED.value
                         image["result_url"] = result.get("generated_image_url")
                         task_data["results"]["success_count"] += 1
-                        task_data["results"]["generated_images"].append({
+                        # 保存完整的result信息，包括prompt
+                        generated_image = {
                             "filename": image_filename,
                             "generated_url": result.get("generated_image_url"),
-                            "generated_filename": result.get("generated_filename")
-                        })
+                            "generated_filename": result.get("generated_filename"),
+                            "prompt": result.get("prompt")  # 保存每个item的prompt
+                        }
+                        task_data["results"]["generated_images"].append(generated_image)
                     else:
                         image["status"] = TaskStatus.FAILED.value
                         image["error"] = result.get("error")

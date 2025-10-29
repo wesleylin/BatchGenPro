@@ -141,10 +141,26 @@ export default {
         const response = await axios.get('/api/batch/tasks')
         
         if (response.data.success && response.data.tasks && response.data.tasks.length > 0) {
-          // 只显示最新的任务
-          currentTask.value = response.data.tasks[0]
+          const latestTask = response.data.tasks[0]
+          
+          // 如果当前有local task，且后端返回的任务ID匹配，则合并更新（保留items结构）
+          if (currentTask.value && currentTask.value.items && 
+              currentTask.value.task_id && currentTask.value.task_id === latestTask.task_id) {
+            // 合并后端数据到本地任务，保留items结构
+            currentTask.value = {
+              ...currentTask.value,
+              ...latestTask,
+              items: currentTask.value.items  // 保留原有的items
+            }
+          } else {
+            // 首次加载或task_id不匹配，直接使用后端返回的任务
+            currentTask.value = latestTask
+          }
         } else {
-          currentTask.value = null
+          // 只有在没有local task时才清空
+          if (!currentTask.value || !currentTask.value.items) {
+            currentTask.value = null
+          }
         }
       } catch (error) {
         console.error('获取任务失败:', error)
@@ -356,6 +372,12 @@ export default {
     const setLocalTask = (localTask) => {
       currentTask.value = localTask
     }
+    
+    const updateLocalTaskId = (taskId) => {
+      if (currentTask.value) {
+        currentTask.value.task_id = taskId
+      }
+    }
 
     onMounted(() => {
       fetchLatestTask()
@@ -385,7 +407,8 @@ export default {
       getTaskPromptForItem,
       getItemStatus,
       getTaskItems,
-      setLocalTask
+      setLocalTask,
+      updateLocalTaskId
     }
   }
 }

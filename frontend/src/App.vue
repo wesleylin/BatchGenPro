@@ -441,6 +441,10 @@ export default {
           })
           
           if (response.data.success) {
+            // 用后端返回的真实task_id更新本地任务
+            if (taskManagerRef.value && taskManagerRef.value.updateLocalTaskId && response.data.task_id) {
+              taskManagerRef.value.updateLocalTaskId(response.data.task_id)
+            }
             ElMessage.success(`批量生图任务已创建！将生成${limitedVariants.length}张图片`)
           } else {
             ElMessage.error('创建批量生图任务失败: ' + response.data.error)
