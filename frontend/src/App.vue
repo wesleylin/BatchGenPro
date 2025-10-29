@@ -355,6 +355,28 @@ export default {
       return prompts
     }
 
+    // 创建并设置本地任务的公共方法
+    const createAndSetLocalTask = (items, referenceImageUrl = null) => {
+      const localTaskId = 'local_' + Date.now()
+      const localTask = {
+        task_id: localTaskId,
+        status: 'processing',
+        total_images: items.length,
+        processed_images: 0,
+        progress: 0,
+        prompt: items[0]?.prompt || '',
+        items: items,
+        reference_image_url: referenceImageUrl
+      }
+      
+      // 立即设置本地任务，让UI显示出来
+      if (taskManagerRef.value && taskManagerRef.value.setLocalTask) {
+        taskManagerRef.value.setLocalTask(localTask)
+      }
+      
+      return localTask
+    }
+
     // 统一的开始任务处理
     const handleStartTask = async () => {
       if (activeTab.value === 'generate') {
@@ -401,25 +423,12 @@ export default {
           ElMessage.info(`检测到 ${limitedVariants.length} 个变量值，开始生成...`)
           
           // 先创建本地任务对象，立即显示给用户
-          const localTaskId = 'local_' + Date.now()
-          const localTask = {
-            task_id: localTaskId,
-            status: 'processing',
-            total_images: limitedVariants.length,
-            processed_images: 0,
-            progress: 0,
-            items: limitedVariants.map((prompt, index) => ({
-              index: index,
-              prompt: prompt,
-              status: 'pending'
-            })),
-            reference_image_url: referenceImage.value ? URL.createObjectURL(referenceImage.value) : null
-          }
-          
-          // 立即设置本地任务，让UI显示出来
-          if (taskManagerRef.value && taskManagerRef.value.setLocalTask) {
-            taskManagerRef.value.setLocalTask(localTask)
-          }
+          const items = limitedVariants.map((prompt, index) => ({
+            index: index,
+            prompt: prompt,
+            status: 'pending'
+          }))
+          createAndSetLocalTask(items, referenceImage.value ? URL.createObjectURL(referenceImage.value) : null)
           
           // 使用新接口，一次性提交所有prompt
           const formData = new FormData()
@@ -452,26 +461,12 @@ export default {
         } else {
           // 无变量，使用原有逻辑
           // 先创建本地任务对象，立即显示给用户
-          const localTaskId = 'local_' + Date.now()
-          const localTask = {
-            task_id: localTaskId,
-            status: 'processing',
-            total_images: imageCount.value,
-            processed_images: 0,
-            progress: 0,
+          const items = Array.from({length: imageCount.value}, (_, index) => ({
+            index: index,
             prompt: batchPrompt.value,
-            items: Array.from({length: imageCount.value}, (_, index) => ({
-              index: index,
-              prompt: batchPrompt.value,
-              status: 'pending'
-            })),
-            reference_image_url: referenceImage.value ? URL.createObjectURL(referenceImage.value) : null
-          }
-          
-          // 立即设置本地任务，让UI显示出来
-          if (taskManagerRef.value && taskManagerRef.value.setLocalTask) {
-            taskManagerRef.value.setLocalTask(localTask)
-          }
+            status: 'pending'
+          }))
+          createAndSetLocalTask(items, referenceImage.value ? URL.createObjectURL(referenceImage.value) : null)
           
           const formData = new FormData()
           
@@ -537,26 +532,13 @@ export default {
       
       try {
         // 先创建本地任务对象，立即显示给用户
-        const localTaskId = 'local_' + Date.now()
-        const localTask = {
-          task_id: localTaskId,
-          status: 'processing',
-          total_images: uploadedFiles.value.length,
-          processed_images: 0,
-          progress: 0,
+        const items = uploadedFiles.value.map((fileObj, index) => ({
+          index: index,
           prompt: batchPrompt.value,
-          items: uploadedFiles.value.map((fileObj, index) => ({
-            index: index,
-            prompt: batchPrompt.value,
-            status: 'pending',
-            reference_image_url: URL.createObjectURL(fileObj.file)
-          }))
-        }
-        
-        // 立即设置本地任务，让UI显示出来
-        if (taskManagerRef.value && taskManagerRef.value.setLocalTask) {
-          taskManagerRef.value.setLocalTask(localTask)
-        }
+          status: 'pending',
+          reference_image_url: URL.createObjectURL(fileObj.file)
+        }))
+        createAndSetLocalTask(items)
         
         const formData = new FormData()
         
@@ -625,7 +607,8 @@ export default {
       getVariableValueCount,
       updateVariableCount,
       totalVariableCombinations,
-      hasVariables
+      hasVariables,
+      createAndSetLocalTask
     }
   }
 }
