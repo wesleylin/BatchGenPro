@@ -177,6 +177,10 @@ export default {
             }
           } else {
             // 首次加载或task_id不匹配，直接使用后端返回的任务
+            // 但保留reference_image_url（从local task或之前的任务）
+            if (currentTask.value && currentTask.value.reference_image_url) {
+              latestTask.reference_image_url = currentTask.value.reference_image_url
+            }
             currentTask.value = latestTask
           }
         } else {
