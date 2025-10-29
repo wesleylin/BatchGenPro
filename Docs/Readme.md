@@ -109,7 +109,7 @@ BatchGen Pro 是一个基于 AI 的批量图片生成和修改工具，支持使
   - Redis：任务状态存储（端口 6379）
 
 **部署文件**：
-- `docker/docker-compose.server.yml`：服务器环境（共享 Nginx）
+- `docker-compose.server.yml`：服务器环境（共享 Nginx，位于项目根目录）
 - **注意**：本地开发不需要 Docker，直接运行前后端服务
 
 ## 🔌 API 接口
@@ -163,8 +163,8 @@ BatchGen Pro/
 ├── config/                 # 配置文件
 │   ├── api_keys.py        # API 密钥配置（需要手动创建）
 │   └── api_keys.py.example # API 密钥模板
-├── docker/                 # Docker 配置文件
-│   ├── docker-compose.server.yml # 服务器环境配置
+├── docker-compose.server.yml # 服务器 Docker Compose 配置（根目录）
+├── docker/                 # Docker 构建文件
 │   ├── Dockerfile.backend  # 后端镜像
 │   ├── Dockerfile.frontend # 前端镜像
 │   ├── nginx.conf         # Nginx 配置
@@ -218,7 +218,7 @@ BatchGen Pro/
 
 2. **部署服务**：
    ```bash
-   docker-compose -f docker/docker-compose.server.yml up -d --build
+   docker-compose -f docker-compose.server.yml up -d --build
    ```
 
 3. **访问应用**：
