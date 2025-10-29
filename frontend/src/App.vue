@@ -536,6 +536,28 @@ export default {
       isBatchGenerating.value = true
       
       try {
+        // 先创建本地任务对象，立即显示给用户
+        const localTaskId = 'local_' + Date.now()
+        const localTask = {
+          task_id: localTaskId,
+          status: 'processing',
+          total_images: uploadedFiles.value.length,
+          processed_images: 0,
+          progress: 0,
+          prompt: batchPrompt.value,
+          items: uploadedFiles.value.map((fileObj, index) => ({
+            index: index,
+            prompt: batchPrompt.value,
+            status: 'pending',
+            reference_image_url: URL.createObjectURL(fileObj.file)
+          }))
+        }
+        
+        // 立即设置本地任务，让UI显示出来
+        if (taskManagerRef.value && taskManagerRef.value.setLocalTask) {
+          taskManagerRef.value.setLocalTask(localTask)
+        }
+        
         const formData = new FormData()
         
         // 添加所有文件
@@ -555,6 +577,10 @@ export default {
         })
         
         if (response.data.success) {
+          // 用后端返回的真实task_id更新本地任务
+          if (taskManagerRef.value && taskManagerRef.value.updateLocalTaskId && response.data.task_id) {
+            taskManagerRef.value.updateLocalTaskId(response.data.task_id)
+          }
           // 不显示消息，任务结果会在任务列表中显示
           // 清空上传的文件和提示词
           uploadedFiles.value = []
