@@ -1,177 +1,184 @@
+# BatchGen Pro - 批量图片生成工具
 
+## 📋 项目简介
 
-### **需求文档：团队批量生图Web工具**
+BatchGen Pro 是一个基于 AI 的批量图片生成和修改工具，支持使用多个 AI 模型批量生成或编辑图片。通过简单的 Web 界面，用户可以快速批量处理图片，提高工作效率。
 
-#### **1. 项目目标**
+## ✨ 核心功能
 
-创建一个内部Web应用，使团队成员能批量生成图片。用户上传多张基准图片和一段通用Prompt，系统在后台调用生图API，并实时展示结果。
+### 1. 批量生图（Batch Image Generation）
+- **功能描述**：使用同一份提示词（可选参考图）重复生成多张图片
+- **变量支持**：支持在 prompt 中使用 `{变量名}` 定义变量，自动生成多组 prompt
+  - 例如：`生成一张{动物}的图片` + 变量值：`["鸭子", "兔子", "老虎"]`
+  - 系统会自动生成 3 张不同 prompt 的图片
+- **参考图**：可选择性上传参考图片，所有生成的图片共享同一个参考图
+- **生成数量**：最多支持生成 10 张图片
 
-#### **2. 开发计划（已完成）**
+### 2. 批量改图（Batch Image Modification）
+- **功能描述**：对多张图片使用同一份提示词进行批量修改
+- **支持格式**：支持上传多张图片同时处理
+- **每张图片独立**：每张图片都有独立的参考图和生成结果
 
-**MVP阶段（✅ 已完成）**：
-- ✅ 单张图片生成流程验证
-- ✅ 前端：Vue3 + Element Plus
-- ✅ 后端：Flask + Gemini API
-- ✅ 本地开发环境
-- ✅ 图片上传和生成功能
-- ✅ 前端图片显示和下载
+### 3. 多 API 支持
+- **Gemini API**：支持 `gemini-2.5-flash-image` 模型
+- **豆包 API**：支持豆包图像生成 API
+- **统一接口**：通过 `AIImageGenerator` 统一封装，方便扩展新 API
 
-**V2阶段（✅ 已完成）**：
-- ✅ 多张图片批量生成
-- ✅ 异步任务队列（Redis + 同步处理）
-- ✅ 实时状态更新
-- ✅ 任务管理和进度显示
+### 4. 实时任务管理
+- **任务列表**：提交后立即显示所有任务项，每个任务项包含：
+  - Prompt（变量替换后的实际 prompt）
+  - 参考图（如果有）
+  - 生成结果
+  - 任务状态（未开始/生成中/已完成/失败）
+- **实时更新**：通过轮询机制（3秒间隔）实时更新任务状态和结果
+- **进度追踪**：显示任务完成进度（已完成/总数）
+- **任务持久化**：任务状态保存在 Redis 中，支持跨会话查看
 
-**V3阶段（✅ 已完成）**：
-- ✅ 多API支持（Gemini + 豆包API）
-- ✅ UI优化和用户体验提升
-- ✅ API选择器
-- ✅ 任务管理界面优化
+### 5. 图片下载
+- **单张下载**：每个任务项支持单独下载生成的图片
+- **批量下载**：支持一键下载所有生成的图片（待实现）
 
-**Docker化阶段（✅ 已完成）**：
-- ✅ Docker容器化部署
-- ✅ Docker Compose编排
-- ✅ Nginx反向代理
-- ✅ 生产环境配置
+## 🏗️ 技术架构
 
-#### **3. MVP核心用户流程**
+### 前端架构
+- **框架**：Vue 3 (Composition API)
+- **UI 库**：Element Plus
+- **构建工具**：Vite
+- **HTTP 客户端**：Axios
+- **状态管理**：Vue `ref` 和 `computed`
 
-1.  **上传**: 用户上传1张图片
-2.  **配置**: 用户输入Prompt
-3.  **提交**: 用户点击"生成图片"按钮
-4.  **处理**: 系统同步调用Gemini API生成图片
-5.  **展示**: 显示原图和生成结果
-6.  **下载**: 用户可以下载生成的图片
+**主要组件**：
+- `App.vue`：主应用组件，包含标签切换、表单输入、任务提交
+- `BatchTaskManager.vue`：任务管理器，显示任务列表、进度、结果
+- `MultiImageUpload.vue`：多图片上传组件（批量改图）
+- `ImageUpload.vue`：单图片上传组件（批量生图参考图）
 
-#### **4. MVP技术栈**
+### 后端架构
+- **框架**：Flask
+- **语言**：Python 3.12
+- **任务管理**：Redis (存储任务状态)
+- **文件存储**：本地文件系统
+  - `uploads/`：上传的原始图片
+  - `results/`：生成的图片结果
+- **API 客户端**：
+  - `AIImageGenerator`：统一的 AI 图片生成接口
+  - 支持 Gemini 和豆包 API，易于扩展
 
-*   **前端**: Vue 3 (Vite) + Element Plus UI库 + Axios
-*   **后端**: Python 3.12 + Flask + Flask-CORS
-*   **生图API**: Gemini API (google-genai包)
-*   **开发环境**: 本地开发（Python虚拟环境）
-*   **文件存储**: 本地文件系统（uploads/ 和 results/ 目录）
+**核心模块**：
+- `app.py`：Flask 应用主文件，定义所有 API 端点
+- `task_manager.py`：任务管理器，负责任务创建、状态更新、结果存储
+- `tasks.py`：任务处理逻辑，包含同步批处理函数
+- `ai_image_generator.py`：统一的 AI API 客户端封装
 
-#### **5. MVP前端组件**
-
-1.  **`App.vue`** (主组件)
-    *   功能: 整合上传、输入和结果展示
-    *   UI: 简单的单页面布局
-
-2.  **`ImageUpload.vue`**
-    *   功能: 单文件上传
-    *   UI: 拖拽上传区域，显示上传的图片预览
-
-3.  **`PromptInput.vue`**
-    *   功能: 接收用户输入的Prompt
-    *   UI: 文本输入框 + 生成按钮
-
-4.  **`ResultDisplay.vue`**
-    *   功能: 展示原图和生成结果
-    *   UI: 并排显示原图和生成图，下载按钮
-
-#### **6. MVP后端API接口**
-
-*   **Flask App (`app.py`)**
-
-1.  **单图生成接口**
-    *   **Endpoint**: `POST /api/generate`
-    *   **Request Body**: `multipart/form-data`
-        *   `file`: 单个图片文件
-        *   `prompt`: 字符串
-    *   **Logic**:
-        *   接收并保存上传的图片
-        *   调用Gemini API生成图片
-        *   保存生成结果
-        *   返回结果图片URL
-    *   **Success Response** (200 OK):
-        ```json
-        {
-          "success": true,
-          "description": "AI生成的文字描述",
-          "generated_image_url": "/static/results/generated_xxx.png"
-        }
-        ```
-
-2.  **静态文件服务**
-    *   **Endpoint**: `/static/<path:filename>`
-    *   **功能**: 提供上传图片和生成结果的访问
-
-#### **7. Gemini API集成**
-
-*   **API配置**:
-    *   API Key: `AIzaSyBe1CcdEtm6n--UTp6rXvErKfl3ZZK_Igs`
-    *   Model: `gemini-2.5-flash-image`
-    *   功能: 根据图片和Prompt生成新图片
-    *   包: `google-genai` (官方推荐)
-
-#### **8. 项目结构**
+### 数据流架构
 
 ```
-BatchGen-Pro/
-├── frontend/              # Vue3前端
+用户提交任务
+    ↓
+前端创建本地任务（立即显示）
+    ↓
+调用后端 API
+    ↓
+后端创建任务（存储到 Redis）
+    ↓
+同步处理任务（调用 AI API）
+    ↓
+更新任务状态和结果
+    ↓
+前端轮询获取最新状态
+    ↓
+更新 UI 显示
+```
+
+### 部署架构
+- **容器化**：Docker + Docker Compose
+- **Web 服务器**：Nginx（生产环境）
+- **服务编排**：
+  - Frontend：Nginx 静态文件服务
+  - Backend：Flask 应用（端口 5001/8989）
+  - Redis：任务状态存储（端口 6379）
+
+**部署文件**：
+- `docker-compose.yml`：本地开发环境
+- `docker-compose.prod.yml`：独立生产环境
+- `docker-compose.server.yml`：服务器环境（共享 Nginx）
+
+## 🔌 API 接口
+
+### 单图生成（MVP阶段）
+- `POST /api/generate`：单张图片生成接口
+
+### 批量任务接口
+- `POST /api/batch/generate`：批量改图接口（多图片 + 单 prompt）
+- `POST /api/batch/generate-from-image`：批量生图接口（可选参考图 + 数量）
+- `POST /api/batch/generate-with-prompts`：批量生图接口（多 prompt，支持变量）
+
+### 任务管理接口
+- `GET /api/batch/tasks`：获取所有任务列表
+- `GET /api/batch/tasks/<task_id>`：获取指定任务详情
+- `GET /api/batch/tasks/<task_id>/results`：获取任务结果
+- `DELETE /api/batch/tasks/<task_id>`：删除任务
+
+### 静态文件
+- `/static/uploads/<filename>`：访问上传的图片
+- `/static/results/<filename>`：访问生成的图片
+
+### 健康检查
+- `GET /api/health`：服务健康检查
+
+## 📂 项目结构
+
+```
+BatchGen Pro/
+├── backend/                 # 后端代码
+│   ├── app.py              # Flask 应用主文件
+│   ├── ai_image_generator.py  # 统一的 AI API 客户端
+│   ├── task_manager.py     # 任务管理器
+│   ├── tasks.py            # 任务处理逻辑
+│   ├── celery_config.py    # Celery 配置（未使用）
+│   ├── requirements.txt    # Python 依赖
+│   ├── uploads/            # 上传图片存储
+│   └── results/            # 生成结果存储
+├── frontend/               # 前端代码
 │   ├── src/
+│   │   ├── App.vue         # 主应用组件
 │   │   ├── components/
-│   │   ├── App.vue
-│   │   └── main.js
+│   │   │   ├── BatchTaskManager.vue  # 任务管理器组件
+│   │   │   ├── MultiImageUpload.vue  # 多图片上传
+│   │   │   ├── ImageUpload.vue       # 单图片上传
+│   │   │   ├── PromptInput.vue       # Prompt 输入
+│   │   │   └── ResultDisplay.vue     # 结果展示
+│   │   └── main.js         # 入口文件
 │   ├── package.json
 │   └── vite.config.js
-├── backend/               # Flask后端
-│   ├── app.py
-│   ├── requirements.txt
-│   ├── uploads/           # 上传图片存储
-│   └── results/           # 生成结果存储
-├── config/                # 配置文件
-│   └── api_keys.py
-└── Docs/
-    └── Readme.md
+├── config/                 # 配置文件
+│   └── api_keys.py        # API 密钥配置
+├── docker/                 # Docker 配置
+│   └── nginx.conf         # Nginx 配置文件
+├── Docs/                   # 文档
+│   └── Readme.md          # 本文档
+├── docker-compose.yml      # 本地开发环境
+├── docker-compose.prod.yml # 生产环境
+├── docker-compose.server.yml # 服务器环境
+├── Dockerfile.backend      # 后端镜像
+├── Dockerfile.frontend     # 前端镜像
+├── deploy.sh               # 部署脚本
+└── DEPLOYMENT.md           # 部署说明文档
 ```
 
-#### **9. Docker部署**
+## 🚀 快速开始
 
-**环境要求**：
-- Docker 20.10+
-- Docker Compose 2.0+
+### 环境要求
+- **开发环境**：
+  - Python 3.12+
+  - Node.js 18+
+  - Redis (可选，用于任务队列)
 
-**快速部署**：
+- **生产环境**：
+  - Docker 20.10+
+  - Docker Compose 2.0+
 
-1. **克隆项目**：
-   ```bash
-   git clone <repository-url>
-   cd BatchGen\ Pro
-   ```
-
-2. **配置环境变量**：
-   ```bash
-   cp env.example .env
-   # 编辑 .env 文件，配置API密钥等
-   ```
-
-3. **一键部署**：
-   ```bash
-   chmod +x deploy.sh
-   ./deploy.sh deploy prod
-   ```
-
-4. **访问应用**：
-   - 前端：http://localhost
-   - 健康检查：http://localhost/health
-
-**部署命令**：
-- `./deploy.sh deploy prod` - 生产环境部署
-- `./deploy.sh deploy dev` - 开发环境部署
-- `./deploy.sh logs` - 查看日志
-- `./deploy.sh status` - 检查服务状态
-- `./deploy.sh stop` - 停止服务
-- `./deploy.sh cleanup` - 清理环境
-
-#### **10. 本地开发**
-
-**环境要求**：
-- Python 3.12+
-- Node.js 18+
-- Redis (可选，用于任务队列)
-
-**启动步骤**：
+### 本地开发
 
 1. **启动后端**：
    ```bash
@@ -189,26 +196,108 @@ BatchGen-Pro/
    ```
 
 3. **访问应用**：
-   - 前端：http://localhost:3000
-   - 后端API：http://localhost:5001
+   - 前端：http://localhost:8590
+   - 后端 API：http://localhost:5001
 
-**使用流程**：
-1. 上传一张图片
-2. 输入Prompt描述
-3. 点击"生成图片"
-4. 查看生成的图片和AI描述
-5. 下载结果
+### Docker 部署
 
-#### **10. 后续扩展计划**
+1. **配置环境变量**：
+   ```bash
+   cp env.example .env
+   # 编辑 .env 文件，配置 API 密钥等
+   ```
 
-**V2阶段**：
-- 多张图片批量生成
-- Celery异步任务队列
-- Redis状态管理
-- 实时进度更新
+2. **一键部署**：
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh deploy prod
+   ```
 
-**V3阶段**：
-- 豆包API集成
-- Docker容器化部署
-- UI/UX优化
-- 错误重试机制
+3. **访问应用**：
+   - 前端：http://localhost
+   - 健康检查：http://localhost/health
+
+### 服务器部署
+
+详见 `DEPLOYMENT.md` 文档。
+
+## 🎯 使用流程
+
+### 批量生图
+1. 切换到"批量生图"标签
+2. 选择 AI 模型（Gemini 或豆包）
+3. 输入 Prompt（可选使用 `{变量名}` 定义变量）
+4. 如果使用变量，在变量输入框中每行输入一个值
+5. （可选）上传参考图片
+6. 设置生成数量（不使用变量时）
+7. 点击"开始"按钮
+8. 在右侧任务列表查看生成进度和结果
+
+### 批量改图
+1. 切换到"批量改图"标签
+2. 选择 AI 模型
+3. 上传多张需要修改的图片
+4. 输入修改的 Prompt
+5. 点击"开始"按钮
+6. 在右侧任务列表查看每张图片的修改进度和结果
+
+## 🔧 配置说明
+
+### API 密钥配置
+在 `config/api_keys.py` 中配置：
+- `GEMINI_API_KEY`：Gemini API 密钥
+- `DOUBAO_API_KEY`：豆包 API 密钥
+
+### 支持的 API
+- `gemini`：Gemini 2.5 Flash Image 模型
+- `doubao`：豆包图像生成 API
+
+### 文件大小限制
+- 最大文件大小：16MB
+- 支持格式：jpg, jpeg, png, gif, webp
+
+## 📝 开发历史
+
+### MVP 阶段（✅ 已完成）
+- ✅ 单张图片生成流程验证
+- ✅ 前端：Vue3 + Element Plus
+- ✅ 后端：Flask + Gemini API
+- ✅ 本地开发环境
+- ✅ 图片上传和生成功能
+- ✅ 前端图片显示和下载
+
+### V2 阶段（✅ 已完成）
+- ✅ 多张图片批量生成
+- ✅ 异步任务队列（Redis + 同步处理）
+- ✅ 实时状态更新
+- ✅ 任务管理和进度显示
+
+### V3 阶段（✅ 已完成）
+- ✅ 多 API 支持（Gemini + 豆包 API）
+- ✅ UI 优化和用户体验提升
+- ✅ API 选择器
+- ✅ 任务管理界面优化
+- ✅ 批量生图和批量改图功能
+- ✅ Prompt 变量支持
+- ✅ 参考图支持
+- ✅ 实时任务列表显示
+
+### Docker 化阶段（✅ 已完成）
+- ✅ Docker 容器化部署
+- ✅ Docker Compose 编排
+- ✅ Nginx 反向代理
+- ✅ 生产环境配置
+- ✅ 服务器部署支持
+
+## 🔮 未来计划
+
+- [ ] 批量下载功能
+- [ ] 任务历史记录
+- [ ] 更多 AI 模型支持
+- [ ] 任务暂停/恢复功能
+- [ ] 图片预览优化
+- [ ] 错误重试机制改进
+
+## 📄 许可证
+
+内部项目，仅供团队使用。
