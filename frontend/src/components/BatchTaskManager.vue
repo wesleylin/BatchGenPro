@@ -170,16 +170,21 @@ export default {
                     if (result.filename) {
                       currentTask.value.items[index].filename = result.filename
                     }
-                    // 保留原有的prompt
+                    // 保留原有的prompt和reference_image_url（前端临时生成的blob URL）
                   }
                 })
               }
             }
           } else {
             // 首次加载或task_id不匹配，直接使用后端返回的任务
-            // 但保留reference_image_url（从local task或之前的任务）
-            if (currentTask.value && currentTask.value.reference_image_url) {
-              latestTask.reference_image_url = currentTask.value.reference_image_url
+            // 但保留本地items中的reference_image_url（前端临时生成的blob URL）
+            if (currentTask.value && currentTask.value.items && latestTask.items) {
+              // 合并items，保留本地设置的reference_image_url
+              currentTask.value.items.forEach((localItem, index) => {
+                if (latestTask.items[index] && localItem.reference_image_url) {
+                  latestTask.items[index].reference_image_url = localItem.reference_image_url
+                }
+              })
             }
             currentTask.value = latestTask
           }
