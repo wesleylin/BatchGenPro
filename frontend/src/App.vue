@@ -445,12 +445,34 @@ export default {
             if (taskManagerRef.value && taskManagerRef.value.updateLocalTaskId && response.data.task_id) {
               taskManagerRef.value.updateLocalTaskId(response.data.task_id)
             }
-            ElMessage.success(`批量生图任务已创建！将生成${limitedVariants.length}张图片`)
+            // 不显示消息，任务结果会在任务列表中显示
           } else {
             ElMessage.error('创建批量生图任务失败: ' + response.data.error)
           }
         } else {
           // 无变量，使用原有逻辑
+          // 先创建本地任务对象，立即显示给用户
+          const localTaskId = 'local_' + Date.now()
+          const localTask = {
+            task_id: localTaskId,
+            status: 'processing',
+            total_images: imageCount.value,
+            processed_images: 0,
+            progress: 0,
+            prompt: batchPrompt.value,
+            items: Array.from({length: imageCount.value}, (_, index) => ({
+              index: index,
+              prompt: batchPrompt.value,
+              status: 'pending'
+            })),
+            reference_image_url: referenceImage.value ? URL.createObjectURL(referenceImage.value) : null
+          }
+          
+          // 立即设置本地任务，让UI显示出来
+          if (taskManagerRef.value && taskManagerRef.value.setLocalTask) {
+            taskManagerRef.value.setLocalTask(localTask)
+          }
+          
           const formData = new FormData()
           
           // 添加参考图片（如果有）
@@ -471,7 +493,11 @@ export default {
           })
           
           if (response.data.success) {
-            ElMessage.success(`批量生图任务已创建！将生成${imageCount.value}张图片`)
+            // 用后端返回的真实task_id更新本地任务
+            if (taskManagerRef.value && taskManagerRef.value.updateLocalTaskId && response.data.task_id) {
+              taskManagerRef.value.updateLocalTaskId(response.data.task_id)
+            }
+            // 不显示消息，因为任务已完成（同步处理）
           } else {
             ElMessage.error('创建批量生图任务失败: ' + response.data.error)
           }
@@ -529,7 +555,7 @@ export default {
         })
         
         if (response.data.success) {
-          ElMessage.success(`批量改图任务已创建！任务ID: ${response.data.task_id.substring(0, 8)}...`)
+          // 不显示消息，任务结果会在任务列表中显示
           // 清空上传的文件和提示词
           uploadedFiles.value = []
           batchPrompt.value = ''
