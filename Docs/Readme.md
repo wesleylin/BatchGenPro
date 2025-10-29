@@ -109,9 +109,8 @@ BatchGen Pro 是一个基于 AI 的批量图片生成和修改工具，支持使
   - Redis：任务状态存储（端口 6379）
 
 **部署文件**：
-- `docker-compose.yml`：本地开发环境
-- `docker-compose.prod.yml`：独立生产环境
-- `docker-compose.server.yml`：服务器环境（共享 Nginx）
+- `docker/docker-compose.server.yml`：服务器环境（共享 Nginx）
+- **注意**：本地开发不需要 Docker，直接运行前后端服务
 
 ## 🔌 API 接口
 
@@ -162,18 +161,17 @@ BatchGen Pro/
 │   ├── package.json
 │   └── vite.config.js
 ├── config/                 # 配置文件
-│   └── api_keys.py        # API 密钥配置
-├── docker/                 # Docker 配置
-│   └── nginx.conf         # Nginx 配置文件
-├── Docs/                   # 文档
-│   └── Readme.md          # 本文档
-├── docker-compose.yml      # 本地开发环境
-├── docker-compose.prod.yml # 生产环境
-├── docker-compose.server.yml # 服务器环境
-├── Dockerfile.backend      # 后端镜像
-├── Dockerfile.frontend     # 前端镜像
-├── deploy.sh               # 部署脚本
-└── DEPLOYMENT.md           # 部署说明文档
+│   ├── api_keys.py        # API 密钥配置（需要手动创建）
+│   └── api_keys.py.example # API 密钥模板
+├── docker/                 # Docker 配置文件
+│   ├── docker-compose.server.yml # 服务器环境配置
+│   ├── Dockerfile.backend  # 后端镜像
+│   ├── Dockerfile.frontend # 前端镜像
+│   ├── nginx.conf         # Nginx 配置
+│   └── .dockerignore      # Docker 忽略文件
+├── Docs/                   # 文档目录
+│   ├── Readme.md          # 项目主文档
+│   └── DEPLOYMENT.md      # 部署说明文档
 ```
 
 ## 🚀 快速开始
@@ -211,16 +209,16 @@ BatchGen Pro/
 
 ### Docker 部署
 
-1. **配置环境变量**：
+1. **配置 API 密钥**：
    ```bash
-   cp env.example .env
-   # 编辑 .env 文件，配置 API 密钥等
+   # 复制模板文件并填入实际的 API 密钥
+   cp config/api_keys.py.example config/api_keys.py
+   # 编辑 config/api_keys.py，填入真实的 API 密钥
    ```
 
-2. **一键部署**：
+2. **部署服务**：
    ```bash
-   chmod +x deploy.sh
-   ./deploy.sh deploy prod
+   docker-compose -f docker/docker-compose.server.yml up -d --build
    ```
 
 3. **访问应用**：
@@ -229,7 +227,7 @@ BatchGen Pro/
 
 ### 服务器部署
 
-详见 `DEPLOYMENT.md` 文档。
+详见 `Docs/DEPLOYMENT.md` 文档。
 
 ## 🎯 使用流程
 
