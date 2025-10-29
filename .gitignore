@@ -53,6 +53,11 @@ results/
 *.log
 *.tmp
 
+# Config files with sensitive data (keep api_keys.py.example for reference)
+config/api_keys.py
+.env
+.env.local
+
 # Node.js (for frontend)
 node_modules/
 npm-debug.log*

@@ -1,5 +1,15 @@
 # BatchGen Pro - 批量图片生成工具
 
+## 📦 代码仓库
+
+**GitHub**: https://github.com/wesleylin/BatchGen-Pro.git
+
+```bash
+# 克隆项目
+git clone https://github.com/wesleylin/BatchGen-Pro.git
+cd BatchGen-Pro
+```
+
 ## 📋 项目简介
 
 BatchGen Pro 是一个基于 AI 的批量图片生成和修改工具，支持使用多个 AI 模型批量生成或编辑图片。通过简单的 Web 界面，用户可以快速批量处理图片，提高工作效率。
