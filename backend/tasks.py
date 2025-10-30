@@ -204,7 +204,7 @@ def update_task_results(self, task_id, results):
             'error': str(e)
         }
 
-def process_batch_task_sync(task_id, images_data, prompt, api_type="gemini"):
+def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="gemini"):
     """
     同步处理批量任务（不使用Celery）
     
@@ -226,7 +226,7 @@ def process_batch_task_sync(task_id, images_data, prompt, api_type="gemini"):
         for i, image_data in enumerate(images_data):
             # 更新进度
             progress = (i / total_images) * 100
-            task_manager.update_task_progress(task_id, progress, i + 1)
+            task_manager.update_task_progress(session_id, task_id, progress, i + 1)
             
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
@@ -236,7 +236,7 @@ def process_batch_task_sync(task_id, images_data, prompt, api_type="gemini"):
             results.append(result)
             
             # 更新任务结果
-            task_manager.add_task_result(task_id, image_data['filename'], result)
+            task_manager.add_task_result(session_id, task_id, image_data['filename'], result)
             
             # 短暂延迟，避免API限制
             time.sleep(1)
@@ -322,7 +322,7 @@ def generate_single_image_sync(file_data, filename, prompt, task_id):
             'error': str(e)
         }
 
-def process_batch_generate_sync(task_id, reference_image_data, prompt, image_count, api_type="gemini"):
+def process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type="gemini"):
     """
     批量生图：使用同一张参考图和prompt重复生成多张图片
     
@@ -345,7 +345,7 @@ def process_batch_generate_sync(task_id, reference_image_data, prompt, image_cou
         for i in range(image_count):
             # 更新进度
             progress = (i / total_images) * 100
-            task_manager.update_task_progress(task_id, progress, i + 1)
+            task_manager.update_task_progress(session_id, task_id, progress, i + 1)
             
             # 生成文件名
             filename = f"generated_{i+1}.png"
@@ -364,7 +364,7 @@ def process_batch_generate_sync(task_id, reference_image_data, prompt, image_cou
             results.append(result)
             
             # 更新任务结果
-            task_manager.add_task_result(task_id, filename, result)
+            task_manager.add_task_result(session_id, task_id, filename, result)
             
             # 短暂延迟，避免API限制
             time.sleep(1)
@@ -384,7 +384,7 @@ def process_batch_generate_sync(task_id, reference_image_data, prompt, image_cou
             'error': str(e)
         }
 
-def process_batch_generate_multi_prompt_sync(task_id, reference_image_data, prompts, api_type="gemini"):
+def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type="gemini"):
     """
     批量生图：使用同一张参考图，但每个prompt生成一张图片（用于变量功能）
     
@@ -406,7 +406,7 @@ def process_batch_generate_multi_prompt_sync(task_id, reference_image_data, prom
         for i, prompt in enumerate(prompts):
             # 更新进度
             progress = (i / total_images) * 100
-            task_manager.update_task_progress(task_id, progress, i + 1)
+            task_manager.update_task_progress(session_id, task_id, progress, i + 1)
             
             # 生成文件名
             filename = f"generated_{i+1}.png"
@@ -427,7 +427,7 @@ def process_batch_generate_multi_prompt_sync(task_id, reference_image_data, prom
             results.append(result)
             
             # 更新任务结果
-            task_manager.add_task_result(task_id, filename, result)
+            task_manager.add_task_result(session_id, task_id, filename, result)
             
             # 短暂延迟，避免API限制
             time.sleep(1)

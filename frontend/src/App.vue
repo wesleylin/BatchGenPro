@@ -166,12 +166,34 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, RefreshLeft, Plus } from '@element-plus/icons-vue'
 import axios from 'axios'
 import MultiImageUpload from './components/MultiImageUpload.vue'
 import BatchTaskManager from './components/BatchTaskManager.vue'
+
+// —— session id 隔离 ——
+function getOrCreateSessionId() {
+  let sessionId = localStorage.getItem('session_id')
+  if (!sessionId) {
+    if (window.crypto && window.crypto.randomUUID) {
+      sessionId = window.crypto.randomUUID()
+    } else {
+      sessionId = Math.random().toString(36).substring(2) + Date.now().toString(36)
+    }
+    localStorage.setItem('session_id', sessionId)
+  }
+  return sessionId
+}
+
+const sessionId = getOrCreateSessionId()
+axios.defaults.headers.common['X-Session-ID'] = sessionId
+// 拦截器防止被意外覆盖
+axios.interceptors.request.use(config => {
+  config.headers['X-Session-ID'] = sessionId
+  return config
+})
 
 export default {
   name: 'App',

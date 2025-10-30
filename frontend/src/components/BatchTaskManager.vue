@@ -134,6 +134,8 @@ export default {
     const currentTask = ref(null)
     const isLoadingTasks = ref(false)
     let refreshInterval = null
+    // 已提示过失败原因的结果集合，避免重复弹窗
+    const notifiedFailures = new Set()
 
     // 获取任务进度文本
     const getTaskProgress = () => {
@@ -179,6 +181,15 @@ export default {
                     if (result.filename) {
                       currentTask.value.items[index].filename = result.filename
                     }
+                    // 失败项弹出错误信息（仅提示一次）
+                    if (result.error) {
+                      const key = `${currentTask.value.task_id || 'task'}:${result.filename || index}`
+                      if (!notifiedFailures.has(key)) {
+                        const msg = typeof result.error === 'string' ? result.error : JSON.stringify(result.error)
+                        ElMessage.error(`第 ${index + 1} 张生成失败：${msg.substring(0, 160)}`)
+                        notifiedFailures.add(key)
+                      }
+                    }
                     // 保留原有的prompt和reference_image_url（前端临时生成的blob URL）
                   }
                 })
@@ -196,6 +207,19 @@ export default {
               })
             }
             currentTask.value = latestTask
+            // 首次加载/切换任务后，同步提示已失败的项
+            if (currentTask.value && currentTask.value.results && currentTask.value.results.generated_images) {
+              currentTask.value.results.generated_images.forEach((result, index) => {
+                if (result && result.error) {
+                  const key = `${currentTask.value.task_id || 'task'}:${result.filename || index}`
+                  if (!notifiedFailures.has(key)) {
+                    const msg = typeof result.error === 'string' ? result.error : JSON.stringify(result.error)
+                    ElMessage.error(`第 ${index + 1} 张生成失败：${msg.substring(0, 160)}`)
+                    notifiedFailures.add(key)
+                  }
+                }
+              })
+            }
           }
         } else {
           // 只有在没有local task时才清空

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, abort
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
@@ -162,11 +162,20 @@ def health_check():
     """健康检查接口"""
     return jsonify({'status': 'healthy', 'message': 'BatchGen Pro MVP is running'})
 
+def get_session_id_or_abort():
+    session_id = request.headers.get('X-Session-ID')
+    if not session_id:
+        return None
+    return session_id
+
 # ==================== V2阶段：批量生成API ====================
 
 @app.route('/api/batch/generate', methods=['POST'])
 def create_batch_task():
     """创建批量生成任务"""
+    session_id = get_session_id_or_abort()
+    if not session_id:
+        return jsonify({'error': '缺少 Session-ID'}), 400
     try:
         # 检查是否有文件
         if 'files' not in request.files:
@@ -216,7 +225,7 @@ def create_batch_task():
             })
         
         # 创建批量任务
-        task_id, task_data = task_manager.create_task(images_data, prompt, api_type)
+        task_id, task_data = task_manager.create_task(session_id, images_data, prompt, api_type)
         
         # 添加items字段，让前端能够显示所有任务项
         task_data['items'] = []
@@ -228,21 +237,21 @@ def create_batch_task():
             })
         
         # 更新任务状态为处理中，并保存items
-        task_manager.update_task_status(task_id, TaskStatus.PROCESSING, items=task_data['items'])
+        task_manager.update_task_status(session_id, task_id, TaskStatus.PROCESSING, items=task_data['items'])
         
         # 暂时使用同步处理，避免Celery复杂性
         try:
             # 直接调用处理函数
             from tasks import process_batch_task_sync
-            result = process_batch_task_sync(task_id, images_data, prompt, api_type)
+            result = process_batch_task_sync(session_id, task_id, images_data, prompt, api_type)
             
             if result['success']:
-                task_manager.update_task_status(task_id, TaskStatus.COMPLETED)
+                task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
             else:
-                task_manager.update_task_status(task_id, TaskStatus.FAILED)
+                task_manager.update_task_status(session_id, task_id, TaskStatus.FAILED)
         except Exception as e:
             app.logger.error(f"Batch processing error: {str(e)}")
-            task_manager.update_task_status(task_id, TaskStatus.FAILED)
+            task_manager.update_task_status(session_id, task_id, TaskStatus.FAILED)
         
         return jsonify({
             'success': True,
@@ -258,6 +267,9 @@ def create_batch_task():
 @app.route('/api/batch/generate-from-image', methods=['POST'])
 def create_batch_generate_task():
     """创建批量生图任务（同一参考图重复生成N次）"""
+    session_id = get_session_id_or_abort()
+    if not session_id:
+        return jsonify({'error': '缺少 Session-ID'}), 400
     try:
         prompt = request.form.get('prompt', '')
         image_count = int(request.form.get('image_count', 1))
@@ -292,7 +304,7 @@ def create_batch_generate_task():
         images_data = [{'filename': f'generated_{i+1}.png'} for i in range(image_count)]
         
         # 创建批量任务
-        task_id, task_data = task_manager.create_task(images_data, prompt, api_type)
+        task_id, task_data = task_manager.create_task(session_id, images_data, prompt, api_type)
         
         # 添加items字段，让前端能够显示所有任务项
         task_data['items'] = []
@@ -304,20 +316,20 @@ def create_batch_generate_task():
             })
         
         # 更新任务状态为处理中，并保存items
-        task_manager.update_task_status(task_id, TaskStatus.PROCESSING, items=task_data['items'])
+        task_manager.update_task_status(session_id, task_id, TaskStatus.PROCESSING, items=task_data['items'])
         
         # 同步处理批量生图
         try:
             from tasks import process_batch_generate_sync
-            result = process_batch_generate_sync(task_id, reference_image_data, prompt, image_count, api_type)
+            result = process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type)
             
             if result['success']:
-                task_manager.update_task_status(task_id, TaskStatus.COMPLETED)
+                task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
             else:
-                task_manager.update_task_status(task_id, TaskStatus.FAILED)
+                task_manager.update_task_status(session_id, task_id, TaskStatus.FAILED)
         except Exception as e:
             app.logger.error(f"Batch generate processing error: {str(e)}")
-            task_manager.update_task_status(task_id, TaskStatus.FAILED)
+            task_manager.update_task_status(session_id, task_id, TaskStatus.FAILED)
         
         return jsonify({
             'success': True,
@@ -333,6 +345,9 @@ def create_batch_generate_task():
 @app.route('/api/batch/generate-with-prompts', methods=['POST'])
 def create_batch_generate_multi_prompt_task():
     """创建批量生图任务（支持多个不同的prompt）"""
+    session_id = get_session_id_or_abort()
+    if not session_id:
+        return jsonify({'error': '缺少 Session-ID'}), 400
     try:
         import json
         
@@ -377,7 +392,7 @@ def create_batch_generate_multi_prompt_task():
         images_data = [{'filename': f'generated_{i+1}.png'} for i in range(len(prompts))]
         
         # 创建批量任务（使用第一个prompt作为任务prompt）
-        task_id, task_data = task_manager.create_task(images_data, prompts[0], api_type)
+        task_id, task_data = task_manager.create_task(session_id, images_data, prompts[0], api_type)
         
         # 立即添加每个item的prompt信息，让前端能够显示
         task_data['items'] = []
@@ -389,20 +404,20 @@ def create_batch_generate_multi_prompt_task():
             })
         
         # 保存items到Redis
-        task_manager.update_task_status(task_id, TaskStatus.PROCESSING, items=task_data['items'])
+        task_manager.update_task_status(session_id, task_id, TaskStatus.PROCESSING, items=task_data['items'])
         
         # 同步处理批量生图（使用多个prompt）
         try:
             from tasks import process_batch_generate_multi_prompt_sync
-            result = process_batch_generate_multi_prompt_sync(task_id, reference_image_data, prompts, api_type)
+            result = process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type)
             
             if result['success']:
-                task_manager.update_task_status(task_id, TaskStatus.COMPLETED)
+                task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
             else:
-                task_manager.update_task_status(task_id, TaskStatus.FAILED)
+                task_manager.update_task_status(session_id, task_id, TaskStatus.FAILED)
         except Exception as e:
             app.logger.error(f"Batch generate multi-prompt processing error: {str(e)}")
-            task_manager.update_task_status(task_id, TaskStatus.FAILED)
+            task_manager.update_task_status(session_id, task_id, TaskStatus.FAILED)
         
         return jsonify({
             'success': True,
@@ -418,8 +433,11 @@ def create_batch_generate_multi_prompt_task():
 @app.route('/api/batch/tasks', methods=['GET'])
 def get_batch_tasks():
     """获取所有批量任务列表"""
+    session_id = get_session_id_or_abort()
+    if not session_id:
+        return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        tasks = task_manager.get_all_tasks()
+        tasks = task_manager.get_all_tasks(session_id)
         return jsonify({
             'success': True,
             'tasks': tasks
@@ -431,8 +449,11 @@ def get_batch_tasks():
 @app.route('/api/batch/tasks/<task_id>', methods=['GET'])
 def get_batch_task(task_id):
     """获取特定任务详情"""
+    session_id = get_session_id_or_abort()
+    if not session_id:
+        return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        task_data = task_manager.get_task(task_id)
+        task_data = task_manager.get_task(task_id, session_id)
         if task_data:
             return jsonify({
                 'success': True,
@@ -447,8 +468,11 @@ def get_batch_task(task_id):
 @app.route('/api/batch/tasks/<task_id>/status', methods=['GET'])
 def get_batch_task_status(task_id):
     """获取任务状态"""
+    session_id = get_session_id_or_abort()
+    if not session_id:
+        return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        task_data = task_manager.get_task(task_id)
+        task_data = task_manager.get_task(task_id, session_id)
         if task_data:
             return jsonify({
                 'success': True,
@@ -466,8 +490,11 @@ def get_batch_task_status(task_id):
 @app.route('/api/batch/tasks/<task_id>', methods=['DELETE'])
 def cancel_batch_task(task_id):
     """取消任务"""
+    session_id = get_session_id_or_abort()
+    if not session_id:
+        return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        task_data = task_manager.cancel_task(task_id)
+        task_data = task_manager.cancel_task(task_id, session_id=session_id)
         if task_data:
             return jsonify({
                 'success': True,
@@ -483,8 +510,11 @@ def cancel_batch_task(task_id):
 @app.route('/api/batch/tasks/<task_id>/results', methods=['GET'])
 def get_batch_task_results(task_id):
     """获取任务结果"""
+    session_id = get_session_id_or_abort()
+    if not session_id:
+        return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        task_data = task_manager.get_task(task_id)
+        task_data = task_manager.get_task(task_id, session_id)
         if task_data:
             return jsonify({
                 'success': True,
