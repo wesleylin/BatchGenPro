@@ -17,6 +17,9 @@ from ai_image_generator import create_image_generator
 from task_manager import task_manager, TaskStatus
 from tasks import process_batch_task
 
+# 导入每日限额管理器
+from daily_limit_manager import daily_limit_manager
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 CORS(app)  # 启用CORS支持
@@ -91,6 +94,15 @@ def generate_image_with_gemini(image_path, prompt):
 def generate_image():
     """单图生成接口"""
     try:
+        # 检查每日限额（使用IP地址作为用户标识）
+        user_id = request.remote_addr or 'unknown'
+        allowed, used_count, remaining = daily_limit_manager.check_and_increment(user_id, image_count=1)
+        if not allowed:
+            return jsonify({
+                'success': False,
+                'error': f'今日生成限额已用完（已使用{used_count}张，每日限额100张）。请明天再试。'
+            }), 429
+        
         # 检查是否有文件
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
@@ -203,6 +215,15 @@ def create_batch_task():
         if not valid_files:
             return jsonify({'error': 'No valid files provided'}), 400
         
+        # 检查每日限额（使用session_id作为用户标识）
+        image_count = len(valid_files)
+        allowed, used_count, remaining = daily_limit_manager.check_and_increment(session_id, image_count=image_count)
+        if not allowed:
+            return jsonify({
+                'success': False,
+                'error': f'今日生成限额不足（已使用{used_count}张，剩余{remaining}张，需要{image_count}张，每日限额100张）。请明天再试。'
+            }), 429
+        
         # 准备图片数据
         images_data = []
         for file in valid_files:
@@ -283,6 +304,14 @@ def create_batch_generate_task():
         
         if api_type not in SUPPORTED_APIS:
             return jsonify({'error': f'Unsupported API type: {api_type}'}), 400
+        
+        # 检查每日限额（使用session_id作为用户标识）
+        allowed, used_count, remaining = daily_limit_manager.check_and_increment(session_id, image_count=image_count)
+        if not allowed:
+            return jsonify({
+                'success': False,
+                'error': f'今日生成限额不足（已使用{used_count}张，剩余{remaining}张，需要{image_count}张，每日限额100张）。请明天再试。'
+            }), 429
         
         # 参考图是可选的
         reference_image_data = None
@@ -371,6 +400,15 @@ def create_batch_generate_multi_prompt_task():
         
         if api_type not in SUPPORTED_APIS:
             return jsonify({'error': f'Unsupported API type: {api_type}'}), 400
+        
+        # 检查每日限额（使用session_id作为用户标识）
+        image_count = len(prompts)
+        allowed, used_count, remaining = daily_limit_manager.check_and_increment(session_id, image_count=image_count)
+        if not allowed:
+            return jsonify({
+                'success': False,
+                'error': f'今日生成限额不足（已使用{used_count}张，剩余{remaining}张，需要{image_count}张，每日限额100张）。请明天再试。'
+            }), 429
         
         # 参考图是可选的
         reference_image_data = None
