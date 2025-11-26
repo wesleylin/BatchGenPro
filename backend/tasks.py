@@ -204,7 +204,7 @@ def update_task_results(self, task_id, results):
             'error': str(e)
         }
 
-def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="gemini"):
+def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="gemini", api_key=None, model_name=None):
     """
     同步处理批量任务（不使用Celery）
     
@@ -213,6 +213,8 @@ def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="
         images_data: 图片数据列表
         prompt: 生成提示词
         api_type: API类型 ("gemini" 或 "doubao")
+        api_key: API密钥（可选）
+        model_name: 模型名称（可选）
     
     Returns:
         dict: 批量任务结果
@@ -230,7 +232,7 @@ def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="
             
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
-            generator = create_image_generator(api_type)
+            generator = create_image_generator(api_type, api_key, model_name)
             result = generator.generate_image(image_data['file_data'], prompt)
             
             results.append(result)
@@ -322,7 +324,7 @@ def generate_single_image_sync(file_data, filename, prompt, task_id):
             'error': str(e)
         }
 
-def process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type="gemini"):
+def process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type="gemini", api_key=None, model_name=None):
     """
     批量生图：使用同一张参考图和prompt重复生成多张图片
     
@@ -332,6 +334,8 @@ def process_batch_generate_sync(session_id, task_id, reference_image_data, promp
         prompt: 生成提示词
         image_count: 生成图片数量
         api_type: API类型 ("gemini" 或 "doubao")
+        api_key: API密钥（可选）
+        model_name: 模型名称（可选）
     
     Returns:
         dict: 批量任务结果
@@ -352,7 +356,7 @@ def process_batch_generate_sync(session_id, task_id, reference_image_data, promp
             
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
-            generator = create_image_generator(api_type)
+            generator = create_image_generator(api_type, api_key, model_name)
             result = generator.generate_image(reference_image_data, prompt)
             
             # 添加文件名信息
@@ -384,7 +388,7 @@ def process_batch_generate_sync(session_id, task_id, reference_image_data, promp
             'error': str(e)
         }
 
-def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type="gemini"):
+def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type="gemini", api_key=None, model_name=None):
     """
     批量生图：使用同一张参考图，但每个prompt生成一张图片（用于变量功能）
     
@@ -393,6 +397,8 @@ def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_imag
         reference_image_data: 参考图片的二进制数据（可选）
         prompts: 提示词列表
         api_type: API类型 ("gemini" 或 "doubao")
+        api_key: API密钥（可选）
+        model_name: 模型名称（可选）
     
     Returns:
         dict: 批量任务结果
@@ -413,7 +419,7 @@ def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_imag
             
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
-            generator = create_image_generator(api_type)
+            generator = create_image_generator(api_type, api_key, model_name)
             result = generator.generate_image(reference_image_data, prompt)
             
             # 添加文件名信息和prompt

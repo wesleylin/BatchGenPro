@@ -1,5 +1,11 @@
 <template>
   <div id="app">
+    <!-- API配置对话框 -->
+    <ApiConfigDialog 
+      v-model="showApiConfigDialog" 
+      @confirmed="handleApiConfigConfirmed"
+    />
+    
     <div class="app-container">
       <div class="main-content">
         <!-- 左侧操作面板 -->
@@ -38,11 +44,22 @@
             <div class="operation-section">
               <!-- 大模型选择器 -->
               <div class="form-group">
-                <label class="form-label">大模型</label>
+                <div class="model-selector-header">
+                  <label class="form-label">大模型</label>
+                  <el-button 
+                    type="text" 
+                    class="api-config-link"
+                    @click="showApiConfigDialog = true"
+                  >
+                    <el-icon><Setting /></el-icon>
+                    API Key 配置
+                  </el-button>
+                </div>
                 <el-select 
                   v-model="selectedModel" 
                   class="model-selector"
                   placeholder="选择模型"
+                  @change="handleModelChange"
                 >
                   <el-option
                     v-for="model in availableModels"
@@ -168,10 +185,11 @@
 <script>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, RefreshLeft, Plus } from '@element-plus/icons-vue'
+import { ArrowDown, RefreshLeft, Plus, Setting } from '@element-plus/icons-vue'
 import axios from 'axios'
 import MultiImageUpload from './components/MultiImageUpload.vue'
 import BatchTaskManager from './components/BatchTaskManager.vue'
+import ApiConfigDialog from './components/ApiConfigDialog.vue'
 
 // —— session id 隔离 ——
 function getOrCreateSessionId() {
@@ -189,23 +207,73 @@ function getOrCreateSessionId() {
 
 const sessionId = getOrCreateSessionId()
 axios.defaults.headers.common['X-Session-ID'] = sessionId
-// 拦截器防止被意外覆盖
+
+// API key管理函数
+function getApiKey(apiType) {
+  if (apiType === 'gemini') {
+    return localStorage.getItem('gemini_api_key')
+  } else if (apiType === 'doubao') {
+    return localStorage.getItem('doubao_api_key')
+  }
+  return null
+}
+
+// 拦截器：添加Session ID和API Key
 axios.interceptors.request.use(config => {
   config.headers['X-Session-ID'] = sessionId
+  
+  // 根据请求中的api_type判断需要哪个API key
+  // 如果是FormData，从formData中获取api_type
+  let apiType = 'gemini'
+  if (config.data instanceof FormData) {
+    apiType = config.data.get('api_type') || 'gemini'
+  } else if (config.params && config.params.api_type) {
+    apiType = config.params.api_type
+  }
+  
+  const apiKey = getApiKey(apiType)
+  if (apiKey) {
+    config.headers['X-API-Key'] = apiKey
+    config.headers['X-API-Type'] = apiType
+  }
+  // 如果没有API key，不设置header，让后端返回错误
+  
   return config
 })
+
+// 响应拦截器：处理API key相关的错误
+axios.interceptors.response.use(
+  response => response,
+  error => {
+    // 如果是401或403错误，可能是API key问题
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      const errorMsg = error.response.data?.error || error.response.data?.message || 'API Key 验证失败'
+      if (errorMsg.includes('API Key') || errorMsg.includes('api_key') || errorMsg.includes('未提供')) {
+        ElMessage.error('API Key 无效或未配置，请检查配置')
+        // 可以在这里触发显示配置对话框
+        // showApiConfigDialog.value = true
+      }
+    }
+    return Promise.reject(error)
+  }
+)
 
 export default {
   name: 'App',
   components: {
     MultiImageUpload,
     BatchTaskManager,
+    ApiConfigDialog,
     ArrowDown,
     RefreshLeft,
-    Plus
+    Plus,
+    Setting
   },
   setup() {
     const taskManagerRef = ref(null)
+    
+    // API配置相关状态
+    const showApiConfigDialog = ref(false)
     
     // 批量改图相关状态
     const uploadedFiles = ref([])
@@ -229,6 +297,7 @@ export default {
     // 可用模型列表
     const availableModels = ref([
       { value: 'gemini-2.5-flash-image', label: 'gemini-2.5-flash-image' },
+      { value: 'models/gemini-3-pro-image-preview', label: 'models/gemini-3-pro-image-preview' },
       { value: 'doubao-seedream-4-0-250828', label: 'doubao-seedream-4-0-250828' }
     ])
 
@@ -277,7 +346,7 @@ export default {
 
     // 根据模型名称获取API类型
     const getApiTypeFromModel = (modelName) => {
-      if (modelName.includes('gemini')) {
+      if (modelName.includes('gemini') || modelName.startsWith('models/gemini')) {
         return 'gemini'
       } else if (modelName.includes('doubao')) {
         return 'doubao'
@@ -352,6 +421,32 @@ export default {
       return detectedVariables.value.length > 0 && 
              detectedVariables.value.some(v => getVariableValueCount(v) > 0)
     })
+    
+    // 检查API key
+    const checkApiKey = () => {
+      const geminiApiKey = localStorage.getItem('gemini_api_key')
+      if (!geminiApiKey) {
+        showApiConfigDialog.value = true
+        return false
+      }
+      return true
+    }
+    
+    // 处理API配置确认
+    const handleApiConfigConfirmed = (config) => {
+      // API key已保存到localStorage，无需额外处理
+      ElMessage.success('API Key 配置成功，可以开始使用了')
+    }
+    
+    // 处理模型切换
+    const handleModelChange = (modelValue) => {
+      const apiType = getApiTypeFromModel(modelValue)
+      const apiKey = getApiKey(apiType)
+      if (!apiKey) {
+        ElMessage.warning(`请先配置 ${apiType === 'gemini' ? 'Gemini' : '豆包'} API Key`)
+        showApiConfigDialog.value = true
+      }
+    }
 
     // 生成所有变量组合的Prompt列表
     const generatePromptVariants = () => {
@@ -401,6 +496,20 @@ export default {
 
     // 统一的开始任务处理
     const handleStartTask = async () => {
+      // 检查API key
+      if (!checkApiKey()) {
+        return
+      }
+      
+      // 检查当前选择的模型需要哪个API key
+      const apiType = getApiTypeFromModel(selectedModel.value)
+      const apiKey = getApiKey(apiType)
+      if (!apiKey) {
+        ElMessage.warning(`请先配置 ${apiType === 'gemini' ? 'Gemini' : '豆包'} API Key`)
+        showApiConfigDialog.value = true
+        return
+      }
+      
       if (activeTab.value === 'generate') {
         await handleBatchGenerate()
       } else {
@@ -465,6 +574,7 @@ export default {
           // 添加所有prompt（JSON格式）
           formData.append('prompts', JSON.stringify(limitedVariants))
           formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+          formData.append('model_name', selectedModel.value)
           
           const response = await axios.post('/api/batch/generate-with-prompts', formData, {
             headers: {
@@ -505,6 +615,7 @@ export default {
           formData.append('prompt', batchPrompt.value)
           formData.append('image_count', imageCount.value)
           formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+          formData.append('model_name', selectedModel.value)
           
           const response = await axios.post('/api/batch/generate-from-image', formData, {
             headers: {
@@ -571,6 +682,7 @@ export default {
         // 添加提示词和API类型
         formData.append('prompt', batchPrompt.value)
         formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+        formData.append('model_name', selectedModel.value)
         
         const response = await axios.post('/api/batch/generate', formData, {
           headers: {
@@ -597,6 +709,11 @@ export default {
       }
     }
 
+    // 组件挂载时检查API key
+    onMounted(() => {
+      checkApiKey()
+    })
+    
     return {
       taskManagerRef,
       uploadedFiles,
@@ -627,7 +744,11 @@ export default {
       updateVariableCount,
       totalVariableCombinations,
       hasVariables,
-      createAndSetLocalTask
+      createAndSetLocalTask,
+      // API配置相关
+      showApiConfigDialog,
+      handleApiConfigConfirmed,
+      handleModelChange
     }
   }
 }
@@ -811,6 +932,30 @@ html, body {
   font-weight: 600;
   color: #333333;
   margin: 0;
+}
+
+.model-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.api-config-link {
+  padding: 0;
+  font-size: 14px;
+  color: #04a864;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.api-config-link:hover {
+  color: #038a56;
+}
+
+.api-config-link :deep(.el-icon) {
+  font-size: 16px;
 }
 
 .model-selector {

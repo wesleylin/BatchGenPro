@@ -4,6 +4,7 @@ from werkzeug.utils import secure_filename
 import os
 import uuid
 import sys
+import redis
 from google import genai
 from PIL import Image
 import io
@@ -25,7 +26,8 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 CORS(app)  # 启用CORS支持
 
 # 配置Gemini API - 使用新的google-genai包
-client = genai.Client(api_key=GEMINI_API_KEY)
+# 注意：现在只使用用户提供的API key，不再使用配置文件中的
+# client = genai.Client(api_key=GEMINI_API_KEY)  # 已禁用，只能使用用户配置的API key
 
 # 确保目录存在
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -34,61 +36,14 @@ os.makedirs(RESULT_FOLDER, exist_ok=True)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def generate_image_with_gemini(image_path, prompt):
-    """使用Gemini API生成图片"""
-    try:
-        # 读取图片
-        with open(image_path, 'rb') as f:
-            image_data = f.read()
-        
-        # 转换为PIL Image
-        image = Image.open(io.BytesIO(image_data))
-        
-        # 构建提示词 - 使用图像编辑模式
-        full_prompt = f"Create a picture of my image with the following changes: {prompt}"
-        
-        # 使用Gemini 2.5 Flash Image模型进行图像生成/编辑
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents=[full_prompt, image]
-        )
-        
-        # 检查响应中是否有生成的图像
-        generated_image = None
-        description = ""
-        
-        for part in response.candidates[0].content.parts:
-            if part.text is not None:
-                description = part.text
-            elif part.inline_data is not None:
-                # 保存生成的图像
-                generated_image = Image.open(io.BytesIO(part.inline_data.data))
-                generated_filename = f"generated_{uuid.uuid4()}.png"
-                generated_path = os.path.join(RESULT_FOLDER, generated_filename)
-                generated_image.save(generated_path)
-                
-                return {
-                    "success": True,
-                    "description": description or f"Successfully generated image based on: {prompt}",
-                    "generated_image_url": f'/static/results/{generated_filename}',
-                    "note": "Image successfully generated using Gemini 2.5 Flash Image"
-                }
-        
-        # 如果没有生成图像，返回描述
-        return {
-            "success": True,
-            "description": description or f"Processed request: {prompt}",
-            "note": "Request processed but no image was generated"
-        }
-        
-    except Exception as e:
-        error_msg = str(e)
-        app.logger.error(f"Gemini API Error: {error_msg}")
-        
-        return {
-            "success": False,
-            "error": f"API调用失败: {error_msg}"
-        }
+def generate_image_with_gemini(image_path, prompt, api_key=None):
+    """使用Gemini API生成图片（已废弃，现在使用AIImageGenerator）"""
+    # 这个函数已经不再使用，保留只是为了兼容性
+    # 现在所有生成都通过 AIImageGenerator 进行
+    return {
+        "success": False,
+        "error": "此接口已废弃，请使用批量生成接口"
+    }
 
 @app.route('/api/generate', methods=['POST'])
 def generate_image():
@@ -125,8 +80,17 @@ def generate_image():
         file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
         file.save(file_path)
         
-        # 调用Gemini API
-        result = generate_image_with_gemini(file_path, prompt)
+        # 调用Gemini API（使用统一的AIImageGenerator）
+        # 获取API key
+        api_key, api_type = get_api_key_from_request()
+        if not api_key:
+            return jsonify({'success': False, 'error': '缺少 API Key，请先配置 API Key'}), 400
+        
+        from ai_image_generator import create_image_generator
+        generator = create_image_generator('gemini', api_key)
+        with open(file_path, 'rb') as f:
+            file_data = f.read()
+        result = generator.generate_image(file_data, prompt)
         
         if result['success']:
             response_data = {
@@ -180,6 +144,12 @@ def get_session_id_or_abort():
         return None
     return session_id
 
+def get_api_key_from_request():
+    """从请求header中获取API key和类型"""
+    api_key = request.headers.get('X-API-Key')
+    api_type = request.headers.get('X-API-Type', 'gemini')
+    return api_key, api_type
+
 # ==================== V2阶段：批量生成API ====================
 
 @app.route('/api/batch/generate', methods=['POST'])
@@ -188,6 +158,12 @@ def create_batch_task():
     session_id = get_session_id_or_abort()
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
+    
+    # 检查API key
+    api_key, api_type = get_api_key_from_request()
+    if not api_key:
+        return jsonify({'success': False, 'error': '缺少 API Key，请先配置 API Key'}), 400
+    
     try:
         # 检查是否有文件
         if 'files' not in request.files:
@@ -260,11 +236,20 @@ def create_batch_task():
         # 更新任务状态为处理中，并保存items
         task_manager.update_task_status(session_id, task_id, TaskStatus.PROCESSING, items=task_data['items'])
         
+        # 获取API key和模型名称
+        api_key, request_api_type = get_api_key_from_request()
+        # 如果header中有api_type，优先使用header中的
+        if request_api_type:
+            api_type = request_api_type
+        
+        # 获取模型名称
+        model_name = request.form.get('model_name')
+        
         # 暂时使用同步处理，避免Celery复杂性
         try:
             # 直接调用处理函数
             from tasks import process_batch_task_sync
-            result = process_batch_task_sync(session_id, task_id, images_data, prompt, api_type)
+            result = process_batch_task_sync(session_id, task_id, images_data, prompt, api_type, api_key, model_name)
             
             if result['success']:
                 task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
@@ -291,6 +276,12 @@ def create_batch_generate_task():
     session_id = get_session_id_or_abort()
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
+    
+    # 检查API key
+    api_key, api_type = get_api_key_from_request()
+    if not api_key:
+        return jsonify({'success': False, 'error': '缺少 API Key，请先配置 API Key'}), 400
+    
     try:
         prompt = request.form.get('prompt', '')
         image_count = int(request.form.get('image_count', 1))
@@ -347,10 +338,19 @@ def create_batch_generate_task():
         # 更新任务状态为处理中，并保存items
         task_manager.update_task_status(session_id, task_id, TaskStatus.PROCESSING, items=task_data['items'])
         
+        # 获取API key和模型名称
+        api_key, request_api_type = get_api_key_from_request()
+        # 如果header中有api_type，优先使用header中的
+        if request_api_type:
+            api_type = request_api_type
+        
+        # 获取模型名称
+        model_name = request.form.get('model_name')
+        
         # 同步处理批量生图
         try:
             from tasks import process_batch_generate_sync
-            result = process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type)
+            result = process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type, api_key, model_name)
             
             if result['success']:
                 task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
@@ -377,6 +377,12 @@ def create_batch_generate_multi_prompt_task():
     session_id = get_session_id_or_abort()
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
+    
+    # 检查API key
+    api_key, api_type = get_api_key_from_request()
+    if not api_key:
+        return jsonify({'success': False, 'error': '缺少 API Key，请先配置 API Key'}), 400
+    
     try:
         import json
         
@@ -444,10 +450,19 @@ def create_batch_generate_multi_prompt_task():
         # 保存items到Redis
         task_manager.update_task_status(session_id, task_id, TaskStatus.PROCESSING, items=task_data['items'])
         
+        # 获取API key和模型名称
+        api_key, request_api_type = get_api_key_from_request()
+        # 如果header中有api_type，优先使用header中的
+        if request_api_type:
+            api_type = request_api_type
+        
+        # 获取模型名称
+        model_name = request.form.get('model_name')
+        
         # 同步处理批量生图（使用多个prompt）
         try:
             from tasks import process_batch_generate_multi_prompt_sync
-            result = process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type)
+            result = process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type, api_key, model_name)
             
             if result['success']:
                 task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
@@ -480,8 +495,13 @@ def get_batch_tasks():
             'success': True,
             'tasks': tasks
         })
+    except redis.ConnectionError as e:
+        app.logger.error(f"Redis connection error: {str(e)}")
+        return jsonify({'success': False, 'error': 'Redis连接失败，请检查Redis服务是否运行'}), 500
     except Exception as e:
         app.logger.error(f"Get batch tasks error: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'获取任务列表失败: {str(e)}'}), 500
 
 @app.route('/api/batch/tasks/<task_id>', methods=['GET'])

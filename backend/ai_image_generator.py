@@ -24,7 +24,7 @@ from config.api_keys import (
 class AIImageGenerator:
     """统一的AI图片生成器"""
     
-    def __init__(self, api_type="gemini"):
+    def __init__(self, api_type="gemini", api_key=None, model_name=None):
         self.api_type = api_type
         self.result_folder = RESULT_FOLDER
         
@@ -32,21 +32,29 @@ class AIImageGenerator:
         os.makedirs(self.result_folder, exist_ok=True)
         
         if api_type == "gemini":
-            self._init_gemini()
+            self._init_gemini(api_key, model_name)
         elif api_type == "doubao":
-            self._init_doubao()
+            self._init_doubao(api_key, model_name)
         else:
             raise ValueError(f"不支持的API类型: {api_type}")
     
-    def _init_gemini(self):
+    def _init_gemini(self, api_key=None, model_name=None):
         """初始化Gemini客户端"""
-        self.client = genai.Client(api_key=GEMINI_API_KEY)
-        self.model = GEMINI_MODEL
+        # 只能使用用户提供的API key，不再使用配置文件中的
+        if not api_key:
+            raise ValueError("Gemini API Key 未提供，请先配置 API Key")
+        self.client = genai.Client(api_key=api_key)
+        # 优先使用传入的model_name，否则使用配置文件中的
+        self.model = model_name or GEMINI_MODEL
     
-    def _init_doubao(self):
+    def _init_doubao(self, api_key=None, model_name=None):
         """初始化豆包客户端"""
-        self.api_key = DOUBAO_API_KEY
-        self.model = DOUBAO_MODEL
+        # 只能使用用户提供的API key，不再使用配置文件中的
+        if not api_key:
+            raise ValueError("豆包 API Key 未提供，请先配置 API Key")
+        self.api_key = api_key
+        # 优先使用传入的model_name，否则使用配置文件中的
+        self.model = model_name or DOUBAO_MODEL
         self.watermark = DOUBAO_WATERMARK
         self.base_url = "https://ark.cn-beijing.volces.com/api/v3"
         self.headers = {
@@ -245,17 +253,19 @@ class AIImageGenerator:
             }
 
 # 工厂函数
-def create_image_generator(api_type="gemini"):
+def create_image_generator(api_type="gemini", api_key=None, model_name=None):
     """
     创建图片生成器实例
     
     Args:
         api_type: API类型 ("gemini" 或 "doubao")
+        api_key: API密钥（可选，如果不提供则使用配置文件中的）
+        model_name: 模型名称（可选，如果不提供则使用配置文件中的）
         
     Returns:
         AIImageGenerator: 图片生成器实例
     """
-    return AIImageGenerator(api_type)
+    return AIImageGenerator(api_type, api_key, model_name)
 
 # 测试函数
 def test_apis():
