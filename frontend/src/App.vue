@@ -232,11 +232,13 @@ axios.interceptors.request.use(config => {
   }
   
   const apiKey = getApiKey(apiType)
-  if (apiKey) {
-    config.headers['X-API-Key'] = apiKey
+  // 只有当API key存在且不为空时才设置header
+  // 如果为空，不设置header，让后端使用服务器配置的key
+  if (apiKey && apiKey.trim()) {
+    config.headers['X-API-Key'] = apiKey.trim()
     config.headers['X-API-Type'] = apiType
   }
-  // 如果没有API key，不设置header，让后端返回错误
+  // 如果没有API key，不设置header，让后端使用服务器配置的key
   
   return config
 })
