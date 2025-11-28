@@ -436,12 +436,8 @@ export default {
     
     // 处理模型切换
     const handleModelChange = (modelValue) => {
-      const apiType = getApiTypeFromModel(modelValue)
-      const apiKey = getApiKey(apiType)
-      if (!apiKey) {
-        ElMessage.warning(`请先配置 ${apiType === 'gemini' ? 'Gemini' : '豆包'} API Key`)
-        showApiConfigDialog.value = true
-      }
+      // 不再强制要求API key，可以使用服务器配置的
+      // 如果用户想使用自己的API key，可以点击配置按钮
     }
 
     // 生成所有变量组合的Prompt列表
