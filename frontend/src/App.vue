@@ -210,12 +210,17 @@ axios.defaults.headers.common['X-Session-ID'] = sessionId
 
 // API key管理函数
 function getApiKey(apiType) {
+  let key = null
   if (apiType === 'gemini') {
-    return localStorage.getItem('gemini_api_key')
+    key = localStorage.getItem('gemini_api_key')
   } else if (apiType === 'doubao') {
-    return localStorage.getItem('doubao_api_key')
+    key = localStorage.getItem('doubao_api_key')
   }
-  return null
+  // 如果key是空字符串、null或占位符，返回null，让后端使用服务器配置的
+  if (!key || !key.trim() || key.trim() === 'your_gemini_api_key_here' || key.trim() === 'your_doubao_api_key_here') {
+    return null
+  }
+  return key.trim()
 }
 
 // 拦截器：添加Session ID和API Key

@@ -40,9 +40,14 @@ class AIImageGenerator:
     
     def _init_gemini(self, api_key=None, model_name=None):
         """初始化Gemini客户端"""
-        # 优先使用用户提供的API key，如果没有则使用服务器配置的
-        final_api_key = api_key or GEMINI_API_KEY
-        if not final_api_key:
+        # 优先使用用户提供的API key，如果没有或为空则使用服务器配置的
+        # 处理None、空字符串、占位符等情况
+        if api_key and api_key.strip() and api_key.strip() != "your_gemini_api_key_here":
+            final_api_key = api_key.strip()
+        else:
+            final_api_key = GEMINI_API_KEY
+        
+        if not final_api_key or final_api_key == "your_gemini_api_key_here":
             raise ValueError("Gemini API Key 未提供，请先配置 API Key")
         self.client = genai.Client(api_key=final_api_key)
         # 优先使用传入的model_name，否则使用配置文件中的
@@ -50,9 +55,14 @@ class AIImageGenerator:
     
     def _init_doubao(self, api_key=None, model_name=None):
         """初始化豆包客户端"""
-        # 优先使用用户提供的API key，如果没有则使用服务器配置的
-        final_api_key = api_key or DOUBAO_API_KEY
-        if not final_api_key:
+        # 优先使用用户提供的API key，如果没有或为空则使用服务器配置的
+        # 处理None、空字符串、占位符等情况
+        if api_key and api_key.strip() and api_key.strip() != "your_doubao_api_key_here":
+            final_api_key = api_key.strip()
+        else:
+            final_api_key = DOUBAO_API_KEY
+        
+        if not final_api_key or final_api_key == "your_doubao_api_key_here":
             raise ValueError("豆包 API Key 未提供，请先配置 API Key")
         self.api_key = final_api_key
         # 优先使用传入的model_name，否则使用配置文件中的
