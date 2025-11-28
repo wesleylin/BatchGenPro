@@ -82,12 +82,12 @@ def generate_image():
         
         # 调用Gemini API（使用统一的AIImageGenerator）
         # 获取API key
+        # 获取API key（可选，如果没有则使用服务器配置的）
         api_key, api_type = get_api_key_from_request()
-        if not api_key:
-            return jsonify({'success': False, 'error': '缺少 API Key，请先配置 API Key'}), 400
         
         from ai_image_generator import create_image_generator
-        generator = create_image_generator('gemini', api_key)
+        # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
+        generator = create_image_generator('gemini', api_key if api_key else None)
         with open(file_path, 'rb') as f:
             file_data = f.read()
         result = generator.generate_image(file_data, prompt)
@@ -147,6 +147,11 @@ def get_session_id_or_abort():
 def get_api_key_from_request():
     """从请求header中获取API key和类型"""
     api_key = request.headers.get('X-API-Key')
+    # 如果api_key是空字符串，转换为None，以便使用服务器配置的key
+    if api_key and api_key.strip():
+        api_key = api_key.strip()
+    else:
+        api_key = None
     api_type = request.headers.get('X-API-Type', 'gemini')
     return api_key, api_type
 
@@ -159,10 +164,8 @@ def create_batch_task():
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
     
-    # 检查API key
+    # 获取API key（可选，如果没有则使用服务器配置的）
     api_key, api_type = get_api_key_from_request()
-    if not api_key:
-        return jsonify({'success': False, 'error': '缺少 API Key，请先配置 API Key'}), 400
     
     try:
         # 检查是否有文件
@@ -277,10 +280,8 @@ def create_batch_generate_task():
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
     
-    # 检查API key
+    # 获取API key（可选，如果没有则使用服务器配置的）
     api_key, api_type = get_api_key_from_request()
-    if not api_key:
-        return jsonify({'success': False, 'error': '缺少 API Key，请先配置 API Key'}), 400
     
     try:
         prompt = request.form.get('prompt', '')
@@ -378,10 +379,8 @@ def create_batch_generate_multi_prompt_task():
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
     
-    # 检查API key
+    # 获取API key（可选，如果没有则使用服务器配置的）
     api_key, api_type = get_api_key_from_request()
-    if not api_key:
-        return jsonify({'success': False, 'error': '缺少 API Key，请先配置 API Key'}), 400
     
     try:
         import json

@@ -232,7 +232,8 @@ def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="
             
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
-            generator = create_image_generator(api_type, api_key, model_name)
+            # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
+            generator = create_image_generator(api_type, api_key if api_key else None, model_name)
             result = generator.generate_image(image_data['file_data'], prompt)
             
             results.append(result)
@@ -356,7 +357,8 @@ def process_batch_generate_sync(session_id, task_id, reference_image_data, promp
             
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
-            generator = create_image_generator(api_type, api_key, model_name)
+            # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
+            generator = create_image_generator(api_type, api_key if api_key else None, model_name)
             result = generator.generate_image(reference_image_data, prompt)
             
             # 添加文件名信息
@@ -419,7 +421,8 @@ def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_imag
             
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
-            generator = create_image_generator(api_type, api_key, model_name)
+            # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
+            generator = create_image_generator(api_type, api_key if api_key else None, model_name)
             result = generator.generate_image(reference_image_data, prompt)
             
             # 添加文件名信息和prompt
