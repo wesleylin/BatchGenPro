@@ -242,10 +242,6 @@ axios.interceptors.request.use(config => {
   if (apiKey && apiKey.trim() && apiKey.trim() !== 'your_gemini_api_key_here' && apiKey.trim() !== 'your_doubao_api_key_here') {
     config.headers['X-API-Key'] = apiKey.trim()
     config.headers['X-API-Type'] = apiType
-    console.log(`[API Key] 使用用户配置的${apiType} key`)
-  } else {
-    // 明确不设置header，让后端使用服务器配置的key
-    console.log(`[API Key] 未设置${apiType} key header，后端将使用服务器配置的key`)
   }
   
   return config
@@ -259,14 +255,12 @@ axios.interceptors.response.use(
     if (error.response && error.response.status === 400) {
       const errorMsg = error.response.data?.error || error.response.data?.message || ''
       if (errorMsg.includes('API key not valid') || errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('API Key')) {
-        console.error('[API Key错误]', errorMsg)
         // 清除可能无效的localStorage中的key
         const apiType = error.config?.headers?.['X-API-Type'] || 'gemini'
         const keyName = apiType === 'gemini' ? 'gemini_api_key' : 'doubao_api_key'
         const storedKey = localStorage.getItem(keyName)
         if (storedKey && (storedKey.trim() === '' || storedKey.includes('your_'))) {
           localStorage.removeItem(keyName)
-          console.log(`[API Key] 已清除无效的${apiType} key`)
         }
         ElMessage.error('API Key 无效，已清除本地配置，将使用服务器配置的key。请刷新页面重试。')
       }

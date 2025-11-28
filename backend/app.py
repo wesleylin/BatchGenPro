@@ -84,7 +84,6 @@ def generate_image():
         # 获取API key
         # 获取API key（可选，如果没有则使用服务器配置的）
         api_key, api_type = get_api_key_from_request()
-        app.logger.info(f"单图生成 - 收到API key: {'已提供' if api_key else '未提供，使用服务器配置'}")
         
         from ai_image_generator import create_image_generator
         # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
@@ -154,8 +153,6 @@ def get_api_key_from_request():
     else:
         api_key = None
     api_type = request.headers.get('X-API-Type', 'gemini')
-    # 调试日志
-    app.logger.debug(f"收到请求 - X-API-Key header: {'存在' if request.headers.get('X-API-Key') else '不存在'}, api_key值: {api_key[:20] + '...' if api_key else 'None'}, api_type: {api_type}")
     return api_key, api_type
 
 # ==================== V2阶段：批量生成API ====================
