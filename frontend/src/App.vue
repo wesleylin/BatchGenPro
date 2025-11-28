@@ -422,13 +422,9 @@ export default {
              detectedVariables.value.some(v => getVariableValueCount(v) > 0)
     })
     
-    // 检查API key
+    // 检查API key（不再强制要求，可以使用服务器配置的）
     const checkApiKey = () => {
-      const geminiApiKey = localStorage.getItem('gemini_api_key')
-      if (!geminiApiKey) {
-        showApiConfigDialog.value = true
-        return false
-      }
+      // 不再强制要求API key，服务器有配置的fallback
       return true
     }
     
@@ -496,19 +492,8 @@ export default {
 
     // 统一的开始任务处理
     const handleStartTask = async () => {
-      // 检查API key
-      if (!checkApiKey()) {
-        return
-      }
-      
-      // 检查当前选择的模型需要哪个API key
-      const apiType = getApiTypeFromModel(selectedModel.value)
-      const apiKey = getApiKey(apiType)
-      if (!apiKey) {
-        ElMessage.warning(`请先配置 ${apiType === 'gemini' ? 'Gemini' : '豆包'} API Key`)
-        showApiConfigDialog.value = true
-        return
-      }
+      // 不再强制要求API key，可以使用服务器配置的
+      // 如果用户想使用自己的API key，可以点击配置按钮
       
       if (activeTab.value === 'generate') {
         await handleBatchGenerate()
@@ -709,9 +694,10 @@ export default {
       }
     }
 
-    // 组件挂载时检查API key
+    // 组件挂载时不再强制检查API key，用户可以选择使用服务器配置的
     onMounted(() => {
-      checkApiKey()
+      // 不再强制显示API配置对话框
+      // 用户可以通过点击"API Key 配置"按钮来配置自己的key
     })
     
     return {

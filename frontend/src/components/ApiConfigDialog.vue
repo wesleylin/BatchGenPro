@@ -1,31 +1,30 @@
 <template>
   <el-dialog
     v-model="visible"
-    title="API 配置"
+    title="API 配置（可选）"
     width="500px"
-    :close-on-click-modal="false"
-    :close-on-press-escape="false"
-    :show-close="false"
-    :before-close="handleBeforeClose"
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
+    :show-close="true"
   >
     <div class="api-config-content">
       <div class="info-box">
         <el-icon class="info-icon"><InfoFilled /></el-icon>
         <p class="info-text">
-          您的 API Key 仅保存在本地浏览器中，我们不会记录或上传您的 API Key。
+          您可以选择使用自己的 API Key（仅保存在本地浏览器），也可以留空使用服务器配置的 API Key。
         </p>
       </div>
       
       <div class="form-group">
-        <label class="form-label">Gemini API Key</label>
+        <label class="form-label">Gemini API Key（可选）</label>
         <el-input
           v-model="geminiApiKey"
           type="password"
-          placeholder="请输入 Gemini API Key"
+          placeholder="留空则使用服务器配置的 API Key"
           show-password
           :disabled="loading"
         />
-        <p class="form-hint">用于 Gemini 模型的图片生成</p>
+        <p class="form-hint">用于 Gemini 模型的图片生成，留空则使用服务器配置</p>
       </div>
       
       <div class="form-group">
@@ -33,11 +32,11 @@
         <el-input
           v-model="doubaoApiKey"
           type="password"
-          placeholder="请输入豆包 API Key（可选）"
+          placeholder="留空则使用服务器配置的 API Key"
           show-password
           :disabled="loading"
         />
-        <p class="form-hint">用于豆包模型的图片生成，如不使用可留空</p>
+        <p class="form-hint">用于豆包模型的图片生成，留空则使用服务器配置</p>
       </div>
       
       <div class="error-message" v-if="errorMessage">
@@ -46,9 +45,10 @@
     </div>
     
     <template #footer>
+      <el-button @click="handleSkip" :disabled="loading">跳过（使用服务器配置）</el-button>
       <el-button @click="handleCancel" :disabled="loading">取消</el-button>
       <el-button type="primary" @click="handleConfirm" :loading="loading">
-        保存并开始使用
+        保存
       </el-button>
     </template>
   </el-dialog>
@@ -100,38 +100,28 @@ export default {
       emit('update:modelValue', newVal)
     })
     
-    const handleBeforeClose = (done) => {
-      // 如果还没有保存API key，不允许关闭
-      const hasGeminiKey = localStorage.getItem('gemini_api_key')
-      if (!hasGeminiKey) {
-        ElMessage.warning('请先配置 API Key 才能使用')
-        return
-      }
-      done()
+    const handleSkip = () => {
+      // 跳过配置，使用服务器配置的API key
+      visible.value = false
+      ElMessage.info('将使用服务器配置的 API Key')
     }
     
     const handleCancel = () => {
-      // 如果还没有保存API key，不允许取消
-      const hasGeminiKey = localStorage.getItem('gemini_api_key')
-      if (!hasGeminiKey) {
-        ElMessage.warning('请先配置 API Key 才能使用')
-        return
-      }
       visible.value = false
     }
     
     const handleConfirm = async () => {
       errorMessage.value = ''
       
-      // 验证Gemini API Key
-      if (!geminiApiKey.value.trim()) {
-        errorMessage.value = '请输入 Gemini API Key'
-        return
-      }
-      
-      // 保存到localStorage
+      // 保存到localStorage（允许为空，使用服务器配置）
       try {
-        localStorage.setItem('gemini_api_key', geminiApiKey.value.trim())
+        if (geminiApiKey.value.trim()) {
+          localStorage.setItem('gemini_api_key', geminiApiKey.value.trim())
+        } else {
+          // 如果清空了，删除保存的key，使用服务器配置
+          localStorage.removeItem('gemini_api_key')
+        }
+        
         if (doubaoApiKey.value.trim()) {
           localStorage.setItem('doubao_api_key', doubaoApiKey.value.trim())
         } else {
@@ -143,7 +133,7 @@ export default {
         
         // 触发确认事件
         emit('confirmed', {
-          geminiApiKey: geminiApiKey.value.trim(),
+          geminiApiKey: geminiApiKey.value.trim() || null,
           doubaoApiKey: doubaoApiKey.value.trim() || null
         })
         
@@ -151,7 +141,11 @@ export default {
         setTimeout(() => {
           visible.value = false
           loading.value = false
-          ElMessage.success('API Key 已保存')
+          if (geminiApiKey.value.trim() || doubaoApiKey.value.trim()) {
+            ElMessage.success('API Key 已保存')
+          } else {
+            ElMessage.info('将使用服务器配置的 API Key')
+          }
         }, 300)
         
       } catch (error) {
@@ -167,7 +161,7 @@ export default {
       doubaoApiKey,
       loading,
       errorMessage,
-      handleBeforeClose,
+      handleSkip,
       handleCancel,
       handleConfirm
     }
