@@ -40,19 +40,21 @@ class AIImageGenerator:
     
     def _init_gemini(self, api_key=None, model_name=None):
         """初始化Gemini客户端"""
-        # 只能使用用户提供的API key，不再使用配置文件中的
-        if not api_key:
+        # 优先使用用户提供的API key，如果没有则使用服务器配置的
+        final_api_key = api_key or GEMINI_API_KEY
+        if not final_api_key:
             raise ValueError("Gemini API Key 未提供，请先配置 API Key")
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(api_key=final_api_key)
         # 优先使用传入的model_name，否则使用配置文件中的
         self.model = model_name or GEMINI_MODEL
     
     def _init_doubao(self, api_key=None, model_name=None):
         """初始化豆包客户端"""
-        # 只能使用用户提供的API key，不再使用配置文件中的
-        if not api_key:
+        # 优先使用用户提供的API key，如果没有则使用服务器配置的
+        final_api_key = api_key or DOUBAO_API_KEY
+        if not final_api_key:
             raise ValueError("豆包 API Key 未提供，请先配置 API Key")
-        self.api_key = api_key
+        self.api_key = final_api_key
         # 优先使用传入的model_name，否则使用配置文件中的
         self.model = model_name or DOUBAO_MODEL
         self.watermark = DOUBAO_WATERMARK
