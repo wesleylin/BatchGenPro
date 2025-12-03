@@ -10,7 +10,7 @@ import time
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.api_keys import GEMINI_API_KEY, GEMINI_MODEL, RESULT_FOLDER
+from config.api_keys import GEMINI_MODEL, RESULT_FOLDER
 
 @celery_app.task(bind=True)
 def generate_single_image(self, file_data, filename, prompt, task_id):
@@ -33,8 +33,9 @@ def generate_single_image(self, file_data, filename, prompt, task_id):
             meta={'status': 'processing', 'filename': filename}
         )
         
-        # 初始化Gemini客户端
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        # 注意：已移除服务器默认 API key，此函数已废弃
+        # 现在所有生成都通过 AIImageGenerator 进行，必须使用用户提供的 API key
+        raise ValueError("此函数已废弃，请使用批量生成接口")
         
         # 将二进制数据转换为PIL Image
         image = Image.open(io.BytesIO(file_data))
@@ -204,7 +205,7 @@ def update_task_results(self, task_id, results):
             'error': str(e)
         }
 
-def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="gemini", api_key=None, model_name=None):
+def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="gemini", api_key=None, model_name=None, base_url=None):
     """
     同步处理批量任务（不使用Celery）
     
@@ -215,6 +216,7 @@ def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="
         api_type: API类型 ("gemini" 或 "doubao")
         api_key: API密钥（可选）
         model_name: 模型名称（可选）
+        base_url: 自定义 base URL（可选，用于第三方 API）
     
     Returns:
         dict: 批量任务结果
@@ -233,7 +235,7 @@ def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
             # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
-            generator = create_image_generator(api_type, api_key if api_key else None, model_name)
+            generator = create_image_generator(api_type, api_key, model_name, base_url)
             result = generator.generate_image(image_data['file_data'], prompt)
             
             results.append(result)
@@ -273,8 +275,9 @@ def generate_single_image_sync(file_data, filename, prompt, task_id):
         dict: 包含生成结果的字典
     """
     try:
-        # 初始化Gemini客户端
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        # 注意：已移除服务器默认 API key，此函数已废弃
+        # 现在所有生成都通过 AIImageGenerator 进行，必须使用用户提供的 API key
+        raise ValueError("此函数已废弃，请使用批量生成接口")
         
         # 将二进制数据转换为PIL Image
         image = Image.open(io.BytesIO(file_data))
@@ -325,7 +328,7 @@ def generate_single_image_sync(file_data, filename, prompt, task_id):
             'error': str(e)
         }
 
-def process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type="gemini", api_key=None, model_name=None):
+def process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type="gemini", api_key=None, model_name=None, base_url=None):
     """
     批量生图：使用同一张参考图和prompt重复生成多张图片
     
@@ -337,6 +340,7 @@ def process_batch_generate_sync(session_id, task_id, reference_image_data, promp
         api_type: API类型 ("gemini" 或 "doubao")
         api_key: API密钥（可选）
         model_name: 模型名称（可选）
+        base_url: 自定义 base URL（可选，用于第三方 API）
     
     Returns:
         dict: 批量任务结果
@@ -355,11 +359,17 @@ def process_batch_generate_sync(session_id, task_id, reference_image_data, promp
             # 生成文件名
             filename = f"generated_{i+1}.png"
             
+            print(f"  [任务处理] 使用 {api_type}，模型: {model_name}, base_url: {base_url}")
+            
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
             # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
-            generator = create_image_generator(api_type, api_key if api_key else None, model_name)
+            print(f"  [任务处理] 创建生成器: api_type={api_type}, model={model_name}, base_url={base_url}")
+            generator = create_image_generator(api_type, api_key, model_name, base_url)
+            print(f"  [任务处理] 生成器类型: {type(generator).__name__}")
+            print(f"  [任务处理] 开始生成图片...")
             result = generator.generate_image(reference_image_data, prompt)
+            print(f"  [任务处理] 生成结果: success={result.get('success')}, error={result.get('error', 'N/A')}")
             
             # 添加文件名信息
             if result['success']:
@@ -390,7 +400,7 @@ def process_batch_generate_sync(session_id, task_id, reference_image_data, promp
             'error': str(e)
         }
 
-def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type="gemini", api_key=None, model_name=None):
+def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type="gemini", api_key=None, model_name=None, base_url=None):
     """
     批量生图：使用同一张参考图，但每个prompt生成一张图片（用于变量功能）
     
@@ -401,6 +411,7 @@ def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_imag
         api_type: API类型 ("gemini" 或 "doubao")
         api_key: API密钥（可选）
         model_name: 模型名称（可选）
+        base_url: 自定义 base URL（可选，用于第三方 API）
     
     Returns:
         dict: 批量任务结果
@@ -419,11 +430,17 @@ def process_batch_generate_multi_prompt_sync(session_id, task_id, reference_imag
             # 生成文件名
             filename = f"generated_{i+1}.png"
             
+            print(f"  [任务处理] 使用 {api_type}，模型: {model_name}, base_url: {base_url}")
+            
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
             # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
-            generator = create_image_generator(api_type, api_key if api_key else None, model_name)
+            print(f"  [任务处理] 创建生成器: api_type={api_type}, model={model_name}, base_url={base_url}")
+            generator = create_image_generator(api_type, api_key, model_name, base_url)
+            print(f"  [任务处理] 生成器类型: {type(generator).__name__}")
+            print(f"  [任务处理] 开始生成图片...")
             result = generator.generate_image(reference_image_data, prompt)
+            print(f"  [任务处理] 生成结果: success={result.get('success')}, error={result.get('error', 'N/A')}")
             
             # 添加文件名信息和prompt
             if result['success']:

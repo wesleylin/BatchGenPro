@@ -28,6 +28,16 @@
       </div>
       
       <div class="form-group">
+        <label class="form-label">Gemini Base URL（可选）</label>
+        <el-input
+          v-model="geminiBaseUrl"
+          placeholder="例如：https://yunwu.ai"
+          :disabled="loading"
+        />
+        <p class="form-hint">用于第三方 Gemini API，留空则使用官方 API</p>
+      </div>
+      
+      <div class="form-group">
         <label class="form-label">豆包 API Key（可选）</label>
         <el-input
           v-model="doubaoApiKey"
@@ -37,6 +47,16 @@
           :disabled="loading"
         />
         <p class="form-hint">用于豆包模型的图片生成，留空则使用服务器配置</p>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">豆包 Base URL（可选）</label>
+        <el-input
+          v-model="doubaoBaseUrl"
+          placeholder="例如：https://custom-doubao-api.com"
+          :disabled="loading"
+        />
+        <p class="form-hint">用于第三方豆包 API，留空则使用官方 API</p>
       </div>
       
       <div class="error-message" v-if="errorMessage">
@@ -74,7 +94,9 @@ export default {
   setup(props, { emit }) {
     const visible = ref(props.modelValue)
     const geminiApiKey = ref('')
+    const geminiBaseUrl = ref('')
     const doubaoApiKey = ref('')
+    const doubaoBaseUrl = ref('')
     const loading = ref(false)
     const errorMessage = ref('')
     
@@ -82,14 +104,22 @@ export default {
     watch(() => props.modelValue, (newVal) => {
       visible.value = newVal
       if (newVal) {
-        // 对话框打开时，尝试从localStorage加载已保存的key
+        // 对话框打开时，尝试从localStorage加载已保存的key和base_url
         const savedGeminiKey = localStorage.getItem('gemini_api_key')
+        const savedGeminiBaseUrl = localStorage.getItem('gemini_base_url')
         const savedDoubaoKey = localStorage.getItem('doubao_api_key')
+        const savedDoubaoBaseUrl = localStorage.getItem('doubao_base_url')
         if (savedGeminiKey) {
           geminiApiKey.value = savedGeminiKey
         }
+        if (savedGeminiBaseUrl) {
+          geminiBaseUrl.value = savedGeminiBaseUrl
+        }
         if (savedDoubaoKey) {
           doubaoApiKey.value = savedDoubaoKey
+        }
+        if (savedDoubaoBaseUrl) {
+          doubaoBaseUrl.value = savedDoubaoBaseUrl
         }
         errorMessage.value = ''
       }
@@ -122,6 +152,12 @@ export default {
           localStorage.removeItem('gemini_api_key')
         }
         
+        if (geminiBaseUrl.value.trim()) {
+          localStorage.setItem('gemini_base_url', geminiBaseUrl.value.trim())
+        } else {
+          localStorage.removeItem('gemini_base_url')
+        }
+        
         if (doubaoApiKey.value.trim()) {
           localStorage.setItem('doubao_api_key', doubaoApiKey.value.trim())
         } else {
@@ -129,12 +165,20 @@ export default {
           localStorage.removeItem('doubao_api_key')
         }
         
+        if (doubaoBaseUrl.value.trim()) {
+          localStorage.setItem('doubao_base_url', doubaoBaseUrl.value.trim())
+        } else {
+          localStorage.removeItem('doubao_base_url')
+        }
+        
         loading.value = true
         
         // 触发确认事件
         emit('confirmed', {
           geminiApiKey: geminiApiKey.value.trim() || null,
-          doubaoApiKey: doubaoApiKey.value.trim() || null
+          geminiBaseUrl: geminiBaseUrl.value.trim() || null,
+          doubaoApiKey: doubaoApiKey.value.trim() || null,
+          doubaoBaseUrl: doubaoBaseUrl.value.trim() || null
         })
         
         // 延迟一下再关闭，让父组件有时间处理
@@ -158,7 +202,9 @@ export default {
     return {
       visible,
       geminiApiKey,
+      geminiBaseUrl,
       doubaoApiKey,
+      doubaoBaseUrl,
       loading,
       errorMessage,
       handleSkip,

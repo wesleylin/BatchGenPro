@@ -223,9 +223,26 @@ function getApiKey(apiType) {
   return key.trim()
 }
 
-// 拦截器：添加Session ID和API Key
+// Base URL管理函数
+function getBaseUrl(apiType) {
+  let baseUrl = null
+  if (apiType === 'gemini') {
+    baseUrl = localStorage.getItem('gemini_base_url')
+  } else if (apiType === 'doubao') {
+    baseUrl = localStorage.getItem('doubao_base_url')
+  }
+  // 如果base_url是空字符串或null，返回null
+  if (!baseUrl || !baseUrl.trim()) {
+    return null
+  }
+  return baseUrl.trim()
+}
+
+// 拦截器：添加Session ID、API Key 和 Auth Token
 axios.interceptors.request.use(config => {
   config.headers['X-Session-ID'] = sessionId
+  
+  // 已移除认证体系，不再添加 Authorization header
   
   // 根据请求中的api_type判断需要哪个API key
   // 如果是FormData，从formData中获取api_type
@@ -244,13 +261,49 @@ axios.interceptors.request.use(config => {
     config.headers['X-API-Type'] = apiType
   }
   
+  // 添加 base_url（如果存在）
+  const baseUrl = getBaseUrl(apiType)
+  if (baseUrl) {
+    if (apiType === 'gemini') {
+      config.headers['X-Gemini-Base-URL'] = baseUrl
+    } else if (apiType === 'doubao') {
+      config.headers['X-Doubao-Base-URL'] = baseUrl
+    }
+  }
+  
+  // 如果是 FormData，也添加 base_url 到 formData
+  if (config.data instanceof FormData && baseUrl) {
+    if (apiType === 'gemini') {
+      config.data.append('gemini_base_url', baseUrl)
+    } else if (apiType === 'doubao') {
+      config.data.append('doubao_base_url', baseUrl)
+    }
+  }
+  
   return config
 })
 
-// 响应拦截器：处理API key相关的错误
+// 响应拦截器：处理API key和认证相关的错误
 axios.interceptors.response.use(
   response => response,
   error => {
+    // 处理401错误（未登录或token过期）
+    if (error.response && error.response.status === 401) {
+      const errorMsg = error.response.data?.error || error.response.data?.message || ''
+      if (errorMsg.includes('token') || errorMsg.includes('登录') || errorMsg.includes('认证')) {
+        // 清除本地认证信息
+        // 已移除认证体系
+        ElMessage.warning('登录已过期，请重新登录')
+        // 可以触发登录对话框，但这里先不自动打开，让用户手动点击
+      }
+    }
+    
+    // 已移除积分体系
+    if (error.response && error.response.status === 402) {
+      const errorMsg = error.response.data?.error || '积分不足'
+      ElMessage.error(errorMsg)
+    }
+    
     // 处理400错误（可能是API key问题）
     if (error.response && error.response.status === 400) {
       const errorMsg = error.response.data?.error || error.response.data?.message || ''
@@ -265,8 +318,8 @@ axios.interceptors.response.use(
         ElMessage.error('API Key 无效，已清除本地配置，将使用服务器配置的key。请刷新页面重试。')
       }
     }
-    // 如果是401或403错误，可能是API key问题
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+    // 如果是403错误，可能是API key问题
+    if (error.response && error.response.status === 403) {
       const errorMsg = error.response.data?.error || error.response.data?.message || 'API Key 验证失败'
       if (errorMsg.includes('API Key') || errorMsg.includes('api_key') || errorMsg.includes('未提供')) {
         ElMessage.error('API Key 无效或未配置，请检查配置')
@@ -293,6 +346,9 @@ export default {
     // API配置相关状态
     const showApiConfigDialog = ref(false)
     
+    // 认证相关状态
+    // 注意：已移除用户认证和积分体系，用户只需提供自己的 API Key 即可使用
+    
     // 批量改图相关状态
     const uploadedFiles = ref([])
     
@@ -315,7 +371,7 @@ export default {
     // 可用模型列表
     const availableModels = ref([
       { value: 'gemini-2.5-flash-image', label: 'gemini-2.5-flash-image' },
-      { value: 'models/gemini-3-pro-image-preview', label: 'models/gemini-3-pro-image-preview' },
+      { value: 'gemini-3-pro-image-preview', label: 'gemini-3-pro-image-preview' },
       { value: 'doubao-seedream-4-0-250828', label: 'doubao-seedream-4-0-250828' }
     ])
 
@@ -364,12 +420,34 @@ export default {
 
     // 根据模型名称获取API类型
     const getApiTypeFromModel = (modelName) => {
-      if (modelName.includes('gemini') || modelName.startsWith('models/gemini')) {
+      if (modelName && (modelName.includes('gemini') || modelName.startsWith('models/gemini'))) {
         return 'gemini'
-      } else if (modelName.includes('doubao')) {
+      } else if (modelName && modelName.includes('doubao')) {
         return 'doubao'
       }
       return 'gemini' // 默认
+    }
+    
+    // 检查 API Key 是否已配置
+    const checkApiKeyConfigured = () => {
+      const apiType = getApiTypeFromModel(selectedModel.value)
+      const apiKey = getApiKey(apiType)
+      return apiKey !== null
+    }
+    
+    // 已移除积分相关代码
+    const getCreditsPerImage = (modelName) => {
+      // 已移除积分体系，此函数保留仅为兼容性
+      return 0
+      if (modelName === 'gemini-2.5-flash-image') {
+        return 38
+      } else if (modelName === 'gemini-3-pro-image-preview') {
+        return 125
+      } else if (modelName === 'doubao-seedream-4-0-250828') {
+        return 38
+      }
+      
+      return 38 // 默认值
     }
 
     // 变量相关函数
@@ -506,18 +584,40 @@ export default {
 
     // 统一的开始任务处理
     const handleStartTask = async () => {
-      // 不再强制要求API key，可以使用服务器配置的
-      // 如果用户想使用自己的API key，可以点击配置按钮
+      console.log('========== 点击开始按钮 ==========')
+      console.log('activeTab:', activeTab.value)
+      console.log('selectedModel:', selectedModel.value)
+      console.log('batchPrompt:', batchPrompt.value)
+      console.log('isBatchGenerating:', isBatchGenerating.value)
+      // 检查 API Key 是否已配置
+      if (!checkApiKeyConfigured()) {
+        ElMessage.warning('请先配置 API Key 后再生成图片')
+        showApiConfigDialog.value = true
+        return
+      }
+      
+      // 计算图片数量
+      const count = activeTab.value === 'generate' 
+        ? (hasVariables.value ? totalVariableCombinations.value : imageCount.value)
+        : uploadedFiles.value.length
       
       if (activeTab.value === 'generate') {
         await handleBatchGenerate()
       } else {
         await handleBatchEdit()
       }
+      
+      // 已移除积分体系，无需刷新用户信息
     }
 
     // 批量生图处理
     const handleBatchGenerate = async () => {
+      console.log('=== 开始批量生图 ===')
+      console.log('selectedModel:', selectedModel.value)
+      console.log('batchPrompt:', batchPrompt.value)
+      console.log('imageCount:', imageCount.value)
+      console.log('referenceImage:', referenceImage.value ? '有参考图' : '无参考图')
+      
       if (!batchPrompt.value.trim()) {
         ElMessage.warning('请输入生成提示词')
         return
@@ -587,7 +687,12 @@ export default {
             if (taskManagerRef.value && taskManagerRef.value.updateLocalTaskId && response.data.task_id) {
               taskManagerRef.value.updateLocalTaskId(response.data.task_id)
             }
-            // 不显示消息，任务结果会在任务列表中显示
+            // 显示积分扣除信息
+            if (response.data.task_data?.credits_deducted) {
+              ElMessage.success(`已扣除 ${response.data.task_data.credits_deducted} 积分，剩余 ${response.data.task_data.remaining_credits} 积分`)
+            }
+            // 刷新用户信息
+            // 已移除积分体系，无需刷新用户信息
           } else {
             ElMessage.error('创建批量生图任务失败: ' + response.data.error)
           }
@@ -616,19 +721,36 @@ export default {
           formData.append('api_type', getApiTypeFromModel(selectedModel.value))
           formData.append('model_name', selectedModel.value)
           
+          // 打印 FormData 内容（用于调试）
+          console.log('发送请求参数:')
+          for (const [key, value] of formData.entries()) {
+            if (key === 'file') {
+              console.log(`  ${key}: [文件, ${value.name || 'N/A'}, ${value.size || 0} 字节]`)
+            } else {
+              console.log(`  ${key}: ${value}`)
+            }
+          }
+          
+          console.log('发送请求到: /api/batch/generate-from-image')
           const response = await axios.post('/api/batch/generate-from-image', formData, {
             headers: {
               'Content-Type': 'multipart/form-data'
             },
             timeout: 180000
           })
+          console.log('收到响应:', response.data)
           
           if (response.data.success) {
             // 用后端返回的真实task_id更新本地任务
             if (taskManagerRef.value && taskManagerRef.value.updateLocalTaskId && response.data.task_id) {
               taskManagerRef.value.updateLocalTaskId(response.data.task_id)
             }
-            // 不显示消息，因为任务已完成（同步处理）
+            // 显示积分扣除信息
+            if (response.data.task_data?.credits_deducted) {
+              ElMessage.success(`已扣除 ${response.data.task_data.credits_deducted} 积分，剩余 ${response.data.task_data.remaining_credits} 积分`)
+            }
+            // 刷新用户信息
+            // 已移除积分体系，无需刷新用户信息
           } else {
             ElMessage.error('创建批量生图任务失败: ' + response.data.error)
           }
@@ -637,13 +759,22 @@ export default {
         // 不清空参考图和提示词，让用户可以继续使用或修改
         
       } catch (error) {
-        console.error('批量生图错误:', error)
-        console.error('错误详情:', error.response?.data)
+        console.error('========== 批量生图错误 ==========')
+        console.error('错误对象:', error)
+        console.error('错误类型:', error.name)
         console.error('错误信息:', error.message)
+        console.error('错误代码:', error.code)
         console.error('请求URL:', error.config?.url)
+        console.error('请求方法:', error.config?.method)
+        console.error('请求头:', error.config?.headers)
+        console.error('响应状态:', error.response?.status)
+        console.error('响应数据:', error.response?.data)
+        console.error('错误堆栈:', error.stack)
+        console.error('================================')
         ElMessage.error('批量生图失败: ' + (error.response?.data?.error || error.message))
       } finally {
         isBatchGenerating.value = false
+        console.log('批量生图处理完成')
       }
     }
 
@@ -695,8 +826,12 @@ export default {
           if (taskManagerRef.value && taskManagerRef.value.updateLocalTaskId && response.data.task_id) {
             taskManagerRef.value.updateLocalTaskId(response.data.task_id)
           }
-          // 不显示消息，任务结果会在任务列表中显示
-          // 不清空上传的文件和提示词，让用户可以继续使用或修改
+          // 显示积分扣除信息
+          if (response.data.task_data?.credits_deducted) {
+            ElMessage.success(`已扣除 ${response.data.task_data.credits_deducted} 积分，剩余 ${response.data.task_data.remaining_credits} 积分`)
+          }
+          // 刷新用户信息
+          await refreshUserInfo()
         } else {
           ElMessage.error('创建批量改图任务失败: ' + response.data.error)
         }
@@ -708,10 +843,9 @@ export default {
       }
     }
 
-    // 组件挂载时不再强制检查API key，用户可以选择使用服务器配置的
+    // 组件挂载时加载用户信息
     onMounted(() => {
-      // 不再强制显示API配置对话框
-      // 用户可以通过点击"API Key 配置"按钮来配置自己的key
+      // 已移除用户认证体系，无需加载用户信息
     })
     
     return {
@@ -736,6 +870,7 @@ export default {
       clearAllImages,
       clearReferenceImage,
       getApiTypeFromModel,
+      getCreditsPerImage,
       // 变量相关
       detectedVariables,
       variableValues,
@@ -748,7 +883,8 @@ export default {
       // API配置相关
       showApiConfigDialog,
       handleApiConfigConfirmed,
-      handleModelChange
+      handleModelChange,
+      checkApiKeyConfigured
     }
   }
 }
@@ -766,6 +902,39 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
+}
+
+/* 用户信息栏样式 */
+.user-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  padding: 10px 20px;
+  background: white;
+  border-bottom: 1px solid #eeeeee;
+  border-left: 1px solid #eeeeee;
+  border-radius: 0 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.username {
+  font-weight: 600;
+  color: #333333;
+}
+
+.credits {
+  color: #04a864;
+  font-weight: 600;
 }
 </style>
 

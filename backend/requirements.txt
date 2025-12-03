@@ -6,3 +6,6 @@ Werkzeug>=2.0.0
 requests>=2.25.0
 celery>=5.3.0
 redis>=4.5.0
+pyjwt>=2.8.0
+bcrypt>=4.0.0
+openai>=1.0.0
