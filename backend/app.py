@@ -11,7 +11,7 @@ import io
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.api_keys import GEMINI_API_KEY, GEMINI_MODEL, UPLOAD_FOLDER, RESULT_FOLDER, SUPPORTED_APIS, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from config.api_keys import GEMINI_MODEL, UPLOAD_FOLDER, RESULT_FOLDER, SUPPORTED_APIS, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from ai_image_generator import create_image_generator
 
 # V2阶段：导入批量任务相关模块
@@ -20,6 +20,8 @@ from tasks import process_batch_task
 
 # 导入每日限额管理器
 from daily_limit_manager import daily_limit_manager
+
+# 注意：已移除认证和积分体系，用户只需提供自己的 API Key 即可使用
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
@@ -49,14 +51,10 @@ def generate_image_with_gemini(image_path, prompt, api_key=None):
 def generate_image():
     """单图生成接口"""
     try:
-        # 检查每日限额（使用IP地址作为用户标识）
-        user_id = request.remote_addr or 'unknown'
-        allowed, used_count, remaining = daily_limit_manager.check_and_increment(user_id, image_count=1)
-        if not allowed:
-            return jsonify({
-                'success': False,
-                'error': f'今日生成限额已用完（已使用{used_count}张，每日限额100张）。请明天再试。'
-            }), 429
+        # 获取模型名称（从form或header）
+        model_name = request.form.get('model_name') or request.headers.get('X-Model-Name')
+        if not model_name:
+            model_name = 'gemini-2.5-flash-image'  # 默认模型
         
         # 检查是否有文件
         if 'file' not in request.files:
@@ -86,8 +84,10 @@ def generate_image():
         api_key, api_type = get_api_key_from_request()
         
         from ai_image_generator import create_image_generator
-        # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
-        generator = create_image_generator('gemini', api_key if api_key else None)
+        # 获取 base_url（可选）
+        base_url = get_base_url_from_request('gemini')
+        # 必须提供API key
+        generator = create_image_generator('gemini', api_key, model_name, base_url)
         with open(file_path, 'rb') as f:
             file_data = f.read()
         result = generator.generate_image(file_data, prompt)
@@ -138,6 +138,8 @@ def health_check():
     """健康检查接口"""
     return jsonify({'status': 'healthy', 'message': 'BatchGen Pro MVP is running'})
 
+# 注意：已移除认证和积分相关API，用户只需提供自己的 API Key 即可使用
+
 def get_session_id_or_abort():
     session_id = request.headers.get('X-Session-ID')
     if not session_id:
@@ -147,25 +149,53 @@ def get_session_id_or_abort():
 def get_api_key_from_request():
     """从请求header中获取API key和类型"""
     api_key = request.headers.get('X-API-Key')
-    # 如果api_key是空字符串，转换为None，以便使用服务器配置的key
-    if api_key and api_key.strip():
-        api_key = api_key.strip()
-    else:
-        api_key = None
+    # 必须提供API key，不再使用服务器配置的key
+    if not api_key or not api_key.strip():
+        raise ValueError("API Key 未提供，请先在设置中配置 API Key")
+    api_key = api_key.strip()
     api_type = request.headers.get('X-API-Type', 'gemini')
     return api_key, api_type
+
+def get_base_url_from_request(api_type="gemini"):
+    """从请求中获取 base_url 配置"""
+    # 根据 API 类型选择对应的 header
+    if api_type == "gemini":
+        header_name = 'X-Gemini-Base-URL'
+        form_key = 'gemini_base_url'
+    elif api_type == "doubao":
+        header_name = 'X-Doubao-Base-URL'
+        form_key = 'doubao_base_url'
+    else:
+        return None
+    
+    # 优先从header获取
+    base_url = request.headers.get(header_name)
+    if not base_url:
+        # 从form data获取
+        base_url = request.form.get(form_key)
+    
+    # 如果base_url是空字符串，转换为None
+    if base_url and base_url.strip():
+        base_url = base_url.strip().rstrip('/')
+    else:
+        base_url = None
+    
+    return base_url
 
 # ==================== V2阶段：批量生成API ====================
 
 @app.route('/api/batch/generate', methods=['POST'])
 def create_batch_task():
-    """创建批量生成任务"""
+    """创建批量生成任务（需要登录）"""
     session_id = get_session_id_or_abort()
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
     
-    # 获取API key（可选，如果没有则使用服务器配置的）
-    api_key, api_type = get_api_key_from_request()
+    # 获取API key（必须提供）
+    try:
+        api_key, api_type = get_api_key_from_request()
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     
     try:
         # 检查是否有文件
@@ -194,16 +224,13 @@ def create_batch_task():
         if not valid_files:
             return jsonify({'error': 'No valid files provided'}), 400
         
-        # 检查每日限额（使用session_id作为用户标识）
-        image_count = len(valid_files)
-        allowed, used_count, remaining = daily_limit_manager.check_and_increment(session_id, image_count=image_count)
-        if not allowed:
-            return jsonify({
-                'success': False,
-                'error': f'今日生成限额不足（已使用{used_count}张，剩余{remaining}张，需要{image_count}张，每日限额100张）。请明天再试。'
-            }), 429
+        # 获取模型名称
+        model_name = request.form.get('model_name')
+        if not model_name:
+            model_name = 'gemini-2.5-flash-image'  # 默认模型
         
         # 准备图片数据
+        image_count = len(valid_files)
         images_data = []
         for file in valid_files:
             filename = secure_filename(file.filename)
@@ -248,11 +275,14 @@ def create_batch_task():
         # 获取模型名称
         model_name = request.form.get('model_name')
         
+        # 获取 base_url 配置（可选，用于第三方 API）
+        base_url = get_base_url_from_request(api_type)
+        
         # 暂时使用同步处理，避免Celery复杂性
         try:
             # 直接调用处理函数
             from tasks import process_batch_task_sync
-            result = process_batch_task_sync(session_id, task_id, images_data, prompt, api_type, api_key, model_name)
+            result = process_batch_task_sync(session_id, task_id, images_data, prompt, api_type, api_key, model_name, base_url)
             
             if result['success']:
                 task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
@@ -275,18 +305,31 @@ def create_batch_task():
 
 @app.route('/api/batch/generate-from-image', methods=['POST'])
 def create_batch_generate_task():
-    """创建批量生图任务（同一参考图重复生成N次）"""
+    """创建批量生图任务（同一参考图重复生成N次，需要登录）"""
+    import time
+    request_time = time.strftime('%Y-%m-%d %H:%M:%S')
+    print(f"\n[{request_time}] ========== 收到批量生图请求 ==========")
+    
     session_id = get_session_id_or_abort()
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
     
-    # 获取API key（可选，如果没有则使用服务器配置的）
-    api_key, api_type = get_api_key_from_request()
+    # 获取API key（必须提供）
+    try:
+        api_key, api_type = get_api_key_from_request()
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     
     try:
         prompt = request.form.get('prompt', '')
         image_count = int(request.form.get('image_count', 1))
         api_type = request.form.get('api_type', 'gemini')
+        
+        print(f"  请求参数:")
+        print(f"    session_id: {session_id}")
+        print(f"    api_type: {api_type}")
+        print(f"    prompt: {prompt[:50]}...")
+        print(f"    image_count: {image_count}")
         
         if not prompt.strip():
             return jsonify({'error': 'Prompt is required'}), 400
@@ -297,13 +340,10 @@ def create_batch_generate_task():
         if api_type not in SUPPORTED_APIS:
             return jsonify({'error': f'Unsupported API type: {api_type}'}), 400
         
-        # 检查每日限额（使用session_id作为用户标识）
-        allowed, used_count, remaining = daily_limit_manager.check_and_increment(session_id, image_count=image_count)
-        if not allowed:
-            return jsonify({
-                'success': False,
-                'error': f'今日生成限额不足（已使用{used_count}张，剩余{remaining}张，需要{image_count}张，每日限额100张）。请明天再试。'
-            }), 429
+        # 获取模型名称
+        model_name = request.form.get('model_name')
+        if not model_name:
+            model_name = 'gemini-2.5-flash-image'  # 默认模型
         
         # 参考图是可选的
         reference_image_data = None
@@ -347,11 +387,19 @@ def create_batch_generate_task():
         
         # 获取模型名称
         model_name = request.form.get('model_name')
+        print(f"    model_name: {model_name}")
+        
+        # 获取 base_url 配置（可选，用于第三方 API）
+        base_url = get_base_url_from_request(api_type)
+        print(f"    base_url: {base_url}")
+        print(f"    api_key: {api_key[:30] + '...' if api_key else 'None'}")
         
         # 同步处理批量生图
         try:
+            print(f"  开始处理任务...")
             from tasks import process_batch_generate_sync
-            result = process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type, api_key, model_name)
+            result = process_batch_generate_sync(session_id, task_id, reference_image_data, prompt, image_count, api_type, api_key, model_name, base_url)
+            print(f"  处理结果: success={result.get('success')}")
             
             if result['success']:
                 task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
@@ -374,13 +422,16 @@ def create_batch_generate_task():
 
 @app.route('/api/batch/generate-with-prompts', methods=['POST'])
 def create_batch_generate_multi_prompt_task():
-    """创建批量生图任务（支持多个不同的prompt）"""
+    """创建批量生图任务（支持多个不同的prompt，需要登录）"""
     session_id = get_session_id_or_abort()
     if not session_id:
         return jsonify({'error': '缺少 Session-ID'}), 400
     
-    # 获取API key（可选，如果没有则使用服务器配置的）
-    api_key, api_type = get_api_key_from_request()
+    # 获取API key（必须提供）
+    try:
+        api_key, api_type = get_api_key_from_request()
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     
     try:
         import json
@@ -406,14 +457,12 @@ def create_batch_generate_multi_prompt_task():
         if api_type not in SUPPORTED_APIS:
             return jsonify({'error': f'Unsupported API type: {api_type}'}), 400
         
-        # 检查每日限额（使用session_id作为用户标识）
+        # 获取模型名称
+        model_name = request.form.get('model_name')
+        if not model_name:
+            model_name = 'gemini-2.5-flash-image'  # 默认模型
+        
         image_count = len(prompts)
-        allowed, used_count, remaining = daily_limit_manager.check_and_increment(session_id, image_count=image_count)
-        if not allowed:
-            return jsonify({
-                'success': False,
-                'error': f'今日生成限额不足（已使用{used_count}张，剩余{remaining}张，需要{image_count}张，每日限额100张）。请明天再试。'
-            }), 429
         
         # 参考图是可选的
         reference_image_data = None
@@ -458,10 +507,13 @@ def create_batch_generate_multi_prompt_task():
         # 获取模型名称
         model_name = request.form.get('model_name')
         
+        # 获取 base_url 配置（可选，用于第三方 API）
+        base_url = get_base_url_from_request(api_type)
+        
         # 同步处理批量生图（使用多个prompt）
         try:
             from tasks import process_batch_generate_multi_prompt_sync
-            result = process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type, api_key, model_name)
+            result = process_batch_generate_multi_prompt_sync(session_id, task_id, reference_image_data, prompts, api_type, api_key, model_name, base_url)
             
             if result['success']:
                 task_manager.update_task_status(session_id, task_id, TaskStatus.COMPLETED)
@@ -510,7 +562,7 @@ def get_batch_task(task_id):
     if not session_id:
         return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        task_data = task_manager.get_task(task_id, session_id)
+        task_data = task_manager.get_task(session_id, task_id)
         if task_data:
             return jsonify({
                 'success': True,
@@ -529,7 +581,7 @@ def get_batch_task_status(task_id):
     if not session_id:
         return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        task_data = task_manager.get_task(task_id, session_id)
+        task_data = task_manager.get_task(session_id, task_id)
         if task_data:
             return jsonify({
                 'success': True,
@@ -551,7 +603,7 @@ def cancel_batch_task(task_id):
     if not session_id:
         return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        task_data = task_manager.cancel_task(task_id, session_id=session_id)
+        task_data = task_manager.cancel_task(session_id, task_id)
         if task_data:
             return jsonify({
                 'success': True,
@@ -571,7 +623,7 @@ def get_batch_task_results(task_id):
     if not session_id:
         return jsonify({'success': False, 'error': '缺少 Session-ID'}), 400
     try:
-        task_data = task_manager.get_task(task_id, session_id)
+        task_data = task_manager.get_task(session_id, task_id)
         if task_data:
             return jsonify({
                 'success': True,
