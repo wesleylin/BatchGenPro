@@ -107,13 +107,6 @@
     <template #footer>
       <el-button 
         v-if="!required" 
-        @click="handleSkip" 
-        :disabled="loading"
-      >
-        跳过
-      </el-button>
-      <el-button 
-        v-if="!required" 
         @click="handleCancel" 
         :disabled="loading"
       >
@@ -325,11 +318,6 @@ export default {
       done()
     }
     
-    const handleSkip = () => {
-      visible.value = false
-      ElMessage.info('将使用服务器配置的 API Key')
-    }
-    
     const handleCancel = () => {
       visible.value = false
     }
@@ -405,7 +393,6 @@ export default {
       canSave,
       handleCustomEndpointChange,
       handleBeforeClose,
-      handleSkip,
       handleCancel,
       handleConfirm,
       validateCurrentConfig

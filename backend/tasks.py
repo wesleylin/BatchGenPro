@@ -234,7 +234,7 @@ def process_batch_task_sync(session_id, task_id, images_data, prompt, api_type="
             
             # 使用统一的API生成器
             from ai_image_generator import create_image_generator
-            # 如果没有提供API key，传递None，让create_image_generator使用服务器配置的
+            # 必须使用用户提供的API key，不再使用服务器配置
             generator = create_image_generator(api_type, api_key, model_name, base_url)
             result = generator.generate_image(image_data['file_data'], prompt)
             

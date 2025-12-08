@@ -236,10 +236,13 @@ const sessionId = getOrCreateSessionId()
 axios.defaults.headers.common['X-Session-ID'] = sessionId
 
 // API key管理函数（兼容新旧格式）
+// 注意：现在必须使用用户自己的API key，不再使用服务器配置
 function getApiKey(apiType) {
   // 优先使用新格式
   const key = getApiKeyUtil(apiType)
-  if (key) return key
+  if (key && key.trim() && key.trim() !== 'your_gemini_api_key_here' && key.trim() !== 'your_doubao_api_key_here') {
+    return key.trim()
+  }
   
   // 兼容旧格式
   let oldKey = null
@@ -248,7 +251,7 @@ function getApiKey(apiType) {
   } else if (apiType === 'doubao') {
     oldKey = localStorage.getItem('doubao_api_key')
   }
-  // 如果key是空字符串、null或占位符，返回null，让后端使用服务器配置的
+  // 如果key是空字符串、null或占位符，返回null（不再使用服务器配置）
   if (!oldKey || !oldKey.trim() || oldKey.trim() === 'your_gemini_api_key_here' || oldKey.trim() === 'your_doubao_api_key_here') {
     return null
   }
@@ -291,12 +294,14 @@ axios.interceptors.request.use(config => {
   }
   
   const apiKey = getApiKey(apiType)
-  // 只有当API key存在且不为空时才设置header
-  // 如果为空，不设置header，让后端使用服务器配置的key
-  if (apiKey && apiKey.trim() && apiKey.trim() !== 'your_gemini_api_key_here' && apiKey.trim() !== 'your_doubao_api_key_here') {
-    config.headers['X-API-Key'] = apiKey.trim()
-    config.headers['X-API-Type'] = apiType
+  // 必须提供API key，不再使用服务器配置
+  if (!apiKey || !apiKey.trim() || apiKey.trim() === 'your_gemini_api_key_here' || apiKey.trim() === 'your_doubao_api_key_here') {
+    const apiName = apiType === 'gemini' ? 'Gemini' : '豆包'
+    ElMessage.error(`请先配置 ${apiName} API Key 才能使用`)
+    return Promise.reject(new Error(`${apiName} API Key 未配置`))
   }
+  config.headers['X-API-Key'] = apiKey.trim()
+  config.headers['X-API-Type'] = apiType
   
   // 添加 base_url（如果存在）
   const baseUrl = getBaseUrl(apiType)

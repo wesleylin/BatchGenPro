@@ -1,11 +1,13 @@
 # API配置
-# 复制此文件为 api_keys.py 并填入实际的 API 密钥
+# 注意：现在不再使用服务器配置的API Key，所有用户必须在前端设置中配置自己的API Key
+# 此文件仅用于配置模型名称和其他非敏感配置项
 
-GEMINI_API_KEY = "your_gemini_api_key_here"
+# Gemini API配置（仅模型配置，不再使用API Key）
+# GEMINI_API_KEY = None  # 已禁用，用户必须在前端配置自己的API Key
 GEMINI_MODEL = "gemini-2.5-flash-image"
 
-# 豆包API配置
-DOUBAO_API_KEY = "your_doubao_api_key_here"
+# 豆包API配置（仅模型配置，不再使用API Key）
+# DOUBAO_API_KEY = None  # 已禁用，用户必须在前端配置自己的API Key
 DOUBAO_MODEL = "doubao-seedream-4-0-250828"
 DOUBAO_WATERMARK = False  # 是否添加水印，False=不添加，True=添加"AI生成"水印
 
