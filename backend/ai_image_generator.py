@@ -62,10 +62,16 @@ class AIImageGenerator:
             self.client = genai.Client(api_key=final_api_key)
         
         # 优先使用传入的model_name，否则使用配置文件中的
-        # 如果模型名称是 gemini-3-pro-image-preview，需要加上 models/ 前缀
+        # 如果模型名称是 gemini-3-pro-image-preview，需要加上 models/ 前缀（仅官方API）
         if model_name:
             if model_name == 'gemini-3-pro-image-preview':
-                self.model = 'models/gemini-3-pro-image-preview'
+                # 官方API需要 models/ 前缀，第三方API保持原样
+                if base_url and base_url.strip():
+                    # 第三方API：保持原样
+                    self.model = 'gemini-3-pro-image-preview'
+                else:
+                    # 官方API：加上 models/ 前缀
+                    self.model = 'models/gemini-3-pro-image-preview'
             else:
                 self.model = model_name
         else:
