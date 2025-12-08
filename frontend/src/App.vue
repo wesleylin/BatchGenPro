@@ -215,7 +215,8 @@ import {
   getAvailableModels,
   getApiTypeFromModel,
   getApiKey as getApiKeyUtil,
-  getBaseUrl as getBaseUrlUtil
+  getBaseUrl as getBaseUrlUtil,
+  getCustomModelName
 } from './utils/apiConfig'
 
 // —— session id 隔离 ——
@@ -780,8 +781,10 @@ export default {
           
           // 添加所有prompt（JSON格式）
           formData.append('prompts', JSON.stringify(limitedVariants))
-          formData.append('api_type', getApiTypeFromModelName(selectedModel.value))
-          formData.append('model_name', selectedModel.value)
+          const apiType = getApiTypeFromModelName(selectedModel.value)
+          formData.append('api_type', apiType)
+          const modelName = getCustomModelName(apiType, selectedModel.value)
+          formData.append('model_name', modelName)
           
           const response = await axios.post('/api/batch/generate-with-prompts', formData, {
             headers: {
@@ -826,8 +829,10 @@ export default {
           // 添加提示词、数量和API类型
           formData.append('prompt', batchPrompt.value)
           formData.append('image_count', imageCount.value)
-          formData.append('api_type', getApiTypeFromModelName(selectedModel.value))
-          formData.append('model_name', selectedModel.value)
+          const apiType = getApiTypeFromModelName(selectedModel.value)
+          formData.append('api_type', apiType)
+          const modelName = getCustomModelName(apiType, selectedModel.value)
+          formData.append('model_name', modelName)
           
           // 打印 FormData 内容（用于调试）
           console.log('发送请求参数:')
@@ -919,8 +924,10 @@ export default {
         
         // 添加提示词和API类型
         formData.append('prompt', batchPrompt.value)
-        formData.append('api_type', getApiTypeFromModelName(selectedModel.value))
-        formData.append('model_name', selectedModel.value)
+        const apiType = getApiTypeFromModelName(selectedModel.value)
+        formData.append('api_type', apiType)
+        const modelName = getCustomModelName(apiType, selectedModel.value)
+        formData.append('model_name', modelName)
         
         const response = await axios.post('/api/batch/generate', formData, {
           headers: {

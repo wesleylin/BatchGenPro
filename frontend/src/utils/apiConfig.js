@@ -230,3 +230,17 @@ export function getBaseUrl(apiType) {
   return null
 }
 
+/**
+ * 获取自定义模型名称（仅在自定义端点时使用）
+ * @param {string} apiType - API类型
+ * @param {string} defaultModelName - 默认模型名称
+ * @returns {string} 自定义模型名称或默认模型名称
+ */
+export function getCustomModelName(apiType, defaultModelName) {
+  const config = getApiConfig(apiType)
+  if (config && config.type === 'third_party' && config.custom_model_name && config.custom_model_name.trim()) {
+    return config.custom_model_name.trim()
+  }
+  return defaultModelName
+}
+

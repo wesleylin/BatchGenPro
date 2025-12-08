@@ -53,7 +53,16 @@ class AIImageGenerator:
         # 否则使用官方 API（genai.Client）
         if base_url and base_url.strip():
             self.use_custom_base_url = True
-            self.custom_base_url = base_url.strip().rstrip('/')
+            # 清理 URL：去除末尾斜杠，并处理双斜杠问题
+            cleaned_url = base_url.strip().rstrip('/')
+            # 处理协议后的双斜杠（保留 http:// 或 https:// 后的双斜杠，但去除路径中的双斜杠）
+            if '://' in cleaned_url:
+                parts = cleaned_url.split('://', 1)
+                protocol = parts[0]
+                path = parts[1].replace('//', '/')  # 去除路径中的双斜杠
+                self.custom_base_url = f"{protocol}://{path}"
+            else:
+                self.custom_base_url = cleaned_url.replace('//', '/')
             # 不使用 genai.Client，改用 HTTP 请求
             self.client = None
         else:
@@ -90,7 +99,16 @@ class AIImageGenerator:
         self.watermark = DOUBAO_WATERMARK
         # 如果提供了 base_url，使用自定义 URL，否则使用默认的官方 URL
         if base_url and base_url.strip():
-            self.base_url = base_url.strip().rstrip('/')
+            # 清理 URL：去除末尾斜杠，并处理双斜杠问题
+            cleaned_url = base_url.strip().rstrip('/')
+            # 处理协议后的双斜杠（保留 http:// 或 https:// 后的双斜杠，但去除路径中的双斜杠）
+            if '://' in cleaned_url:
+                parts = cleaned_url.split('://', 1)
+                protocol = parts[0]
+                path = parts[1].replace('//', '/')  # 去除路径中的双斜杠
+                self.base_url = f"{protocol}://{path}"
+            else:
+                self.base_url = cleaned_url.replace('//', '/')
         else:
             self.base_url = "https://ark.cn-beijing.volces.com/api/v3"
         self.headers = {
@@ -326,8 +344,16 @@ class AIImageGenerator:
                 request_data["prompt"] = prompt
             
             # 发送请求
+            # 检查 base_url 是否已经包含 /images/generations 路径
+            if '/images/generations' in self.base_url:
+                # 如果已经包含完整路径，直接使用
+                endpoint = self.base_url
+            else:
+                # 否则添加 /images/generations 路径
+                endpoint = f"{self.base_url}/images/generations"
+            
             response = requests.post(
-                f"{self.base_url}/images/generations",
+                endpoint,
                 headers=self.headers,
                 json=request_data,
                 timeout=60

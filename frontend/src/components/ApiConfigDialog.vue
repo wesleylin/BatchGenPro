@@ -89,11 +89,36 @@
             placeholder="例如：https://api.speeedai.com/v1beta"
             :disabled="loading"
             @blur="validateCurrentConfig"
-          />
+            class="base-url-input"
+          >
+            <template #prefix>
+              <el-icon><Link /></el-icon>
+            </template>
+          </el-input>
           <p class="form-hint">
             推荐使用 <a href="https://speeedai.com" target="_blank" class="recommend-link">SpeeedAI</a>
           </p>
           <p class="error-hint" v-if="currentErrors.base_url">{{ currentErrors.base_url }}</p>
+        </div>
+        
+        <!-- 自定义模型名称输入（当使用自定义端点时显示） -->
+        <div class="form-group" v-if="currentConfig.useCustomEndpoint">
+          <label class="form-label">
+            自定义模型名称（可选）
+          </label>
+          <el-input
+            v-model="currentConfig.custom_model_name"
+            :placeholder="`例如：${selectedModel === 'gemini' ? 'gemini-2.5-flash-image' : 'doubao-seedream-4-0-250828'}`"
+            :disabled="loading"
+            class="custom-model-input"
+          >
+            <template #prefix>
+              <el-icon><Setting /></el-icon>
+            </template>
+          </el-input>
+          <p class="form-hint">
+            如果您的代理服务使用非标准模型名称，请在此填写。留空则使用标准模型名称。
+          </p>
         </div>
       </div>
       
@@ -127,7 +152,7 @@
 <script>
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { InfoFilled, Check, WarningFilled, Warning, Lock } from '@element-plus/icons-vue'
+import { InfoFilled, Check, WarningFilled, Warning, Lock, Link, Setting } from '@element-plus/icons-vue'
 import { 
   getApiConfig, 
   saveApiConfig, 
@@ -142,7 +167,9 @@ export default {
     Check,
     WarningFilled,
     Warning,
-    Lock
+    Lock,
+    Link,
+    Setting
   },
   props: {
     modelValue: {
@@ -234,6 +261,7 @@ export default {
           api_key: config.api_key || '',
           base_url: config.base_url || '',
           useCustomEndpoint: !!(config.base_url && config.base_url.trim()),
+          custom_model_name: config.custom_model_name || '',
           type: config.type || 'official'
         }
       } else {
@@ -245,6 +273,7 @@ export default {
             api_key: oldKey || '',
             base_url: oldUrl || '',
             useCustomEndpoint: !!(oldUrl && oldUrl.trim()),
+            custom_model_name: '',
             type: oldUrl ? 'third_party' : 'official'
           }
         } else {
@@ -252,6 +281,7 @@ export default {
             api_key: '',
             base_url: '',
             useCustomEndpoint: false,
+            custom_model_name: '',
             type: 'official'
           }
         }
@@ -341,6 +371,8 @@ export default {
           type: currentConfig.value.useCustomEndpoint ? 'third_party' : 'official',
           api_key: currentConfig.value.api_key.trim(),
           base_url: currentConfig.value.useCustomEndpoint ? currentConfig.value.base_url.trim() : '',
+          custom_model_name: currentConfig.value.useCustomEndpoint && currentConfig.value.custom_model_name 
+            ? currentConfig.value.custom_model_name.trim() : '',
           configured: true
         }
         saveApiConfig(selectedModel.value, configToSave)
