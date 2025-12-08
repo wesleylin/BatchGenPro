@@ -79,8 +79,7 @@ def generate_image():
         file.save(file_path)
         
         # 调用Gemini API（使用统一的AIImageGenerator）
-        # 获取API key
-        # 获取API key（可选，如果没有则使用服务器配置的）
+        # 获取API key（必须提供，不再使用服务器配置）
         api_key, api_type = get_api_key_from_request()
         
         from ai_image_generator import create_image_generator

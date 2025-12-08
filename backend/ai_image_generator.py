@@ -62,10 +62,16 @@ class AIImageGenerator:
             self.client = genai.Client(api_key=final_api_key)
         
         # 优先使用传入的model_name，否则使用配置文件中的
-        # 如果模型名称是 gemini-3-pro-image-preview，需要加上 models/ 前缀
+        # 如果模型名称是 gemini-3-pro-image-preview，需要加上 models/ 前缀（仅官方API）
         if model_name:
             if model_name == 'gemini-3-pro-image-preview':
-                self.model = 'models/gemini-3-pro-image-preview'
+                # 官方API需要 models/ 前缀，第三方API保持原样
+                if base_url and base_url.strip():
+                    # 第三方API：保持原样
+                    self.model = 'gemini-3-pro-image-preview'
+                else:
+                    # 官方API：加上 models/ 前缀
+                    self.model = 'models/gemini-3-pro-image-preview'
             else:
                 self.model = model_name
         else:
@@ -73,15 +79,11 @@ class AIImageGenerator:
     
     def _init_doubao(self, api_key=None, model_name=None, base_url=None):
         """初始化豆包客户端"""
-        # 优先使用用户提供的API key，如果没有或为空则使用服务器配置的
-        # 处理None、空字符串、占位符等情况
-        if api_key and api_key.strip() and api_key.strip() != "your_doubao_api_key_here":
-            final_api_key = api_key.strip()
-        else:
-            final_api_key = DOUBAO_API_KEY
+        # 必须使用用户提供的API key，不再使用服务器配置
+        if not api_key or not api_key.strip() or api_key.strip() == "your_doubao_api_key_here":
+            raise ValueError("豆包 API Key 未提供，请先在设置中配置 API Key")
         
-        if not final_api_key or final_api_key == "your_doubao_api_key_here":
-            raise ValueError("豆包 API Key 未提供，请先配置 API Key")
+        final_api_key = api_key.strip()
         self.api_key = final_api_key
         # 优先使用传入的model_name，否则使用配置文件中的
         self.model = model_name or DOUBAO_MODEL

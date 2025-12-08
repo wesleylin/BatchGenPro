@@ -3,6 +3,8 @@
     <!-- API配置对话框 -->
     <ApiConfigDialog 
       v-model="showApiConfigDialog" 
+      :required="isFirstTime"
+      :highlight-api-type="highlightApiType"
       @confirmed="handleApiConfigConfirmed"
     />
     
@@ -66,7 +68,16 @@
                     :key="model.value"
                     :label="model.label"
                     :value="model.value"
-                  />
+                    :disabled="model.disabled"
+                  >
+                    <div class="model-option">
+                      <span>{{ model.label }}</span>
+                      <span class="model-status" :class="model.statusClass">
+                        <el-icon v-if="model.statusIcon"><component :is="model.statusIcon" /></el-icon>
+                        <span>{{ model.statusText }}</span>
+                      </span>
+                    </div>
+                  </el-option>
                 </el-select>
               </div>
               
@@ -183,13 +194,29 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, RefreshLeft, Plus, Setting } from '@element-plus/icons-vue'
+import { ArrowDown, RefreshLeft, Plus, Setting, Check, Warning } from '@element-plus/icons-vue'
+
+// 图标组件映射
+const iconComponents = {
+  Check,
+  Warning
+}
 import axios from 'axios'
 import MultiImageUpload from './components/MultiImageUpload.vue'
 import BatchTaskManager from './components/BatchTaskManager.vue'
 import ApiConfigDialog from './components/ApiConfigDialog.vue'
+import { 
+  isApiConfigInitialized, 
+  migrateOldDataFormat,
+  getApiConfig,
+  isApiConfigured,
+  getAvailableModels,
+  getApiTypeFromModel,
+  getApiKey as getApiKeyUtil,
+  getBaseUrl as getBaseUrlUtil
+} from './utils/apiConfig'
 
 // —— session id 隔离 ——
 function getOrCreateSessionId() {
@@ -208,34 +235,47 @@ function getOrCreateSessionId() {
 const sessionId = getOrCreateSessionId()
 axios.defaults.headers.common['X-Session-ID'] = sessionId
 
-// API key管理函数
+// API key管理函数（兼容新旧格式）
+// 注意：现在必须使用用户自己的API key，不再使用服务器配置
 function getApiKey(apiType) {
-  let key = null
-  if (apiType === 'gemini') {
-    key = localStorage.getItem('gemini_api_key')
-  } else if (apiType === 'doubao') {
-    key = localStorage.getItem('doubao_api_key')
+  // 优先使用新格式
+  const key = getApiKeyUtil(apiType)
+  if (key && key.trim() && key.trim() !== 'your_gemini_api_key_here' && key.trim() !== 'your_doubao_api_key_here') {
+    return key.trim()
   }
-  // 如果key是空字符串、null或占位符，返回null，让后端使用服务器配置的
-  if (!key || !key.trim() || key.trim() === 'your_gemini_api_key_here' || key.trim() === 'your_doubao_api_key_here') {
+  
+  // 兼容旧格式
+  let oldKey = null
+  if (apiType === 'gemini') {
+    oldKey = localStorage.getItem('gemini_api_key')
+  } else if (apiType === 'doubao') {
+    oldKey = localStorage.getItem('doubao_api_key')
+  }
+  // 如果key是空字符串、null或占位符，返回null（不再使用服务器配置）
+  if (!oldKey || !oldKey.trim() || oldKey.trim() === 'your_gemini_api_key_here' || oldKey.trim() === 'your_doubao_api_key_here') {
     return null
   }
-  return key.trim()
+  return oldKey.trim()
 }
 
-// Base URL管理函数
+// Base URL管理函数（兼容新旧格式）
 function getBaseUrl(apiType) {
-  let baseUrl = null
+  // 优先使用新格式
+  const url = getBaseUrlUtil(apiType)
+  if (url) return url
+  
+  // 兼容旧格式
+  let oldUrl = null
   if (apiType === 'gemini') {
-    baseUrl = localStorage.getItem('gemini_base_url')
+    oldUrl = localStorage.getItem('gemini_base_url')
   } else if (apiType === 'doubao') {
-    baseUrl = localStorage.getItem('doubao_base_url')
+    oldUrl = localStorage.getItem('doubao_base_url')
   }
   // 如果base_url是空字符串或null，返回null
-  if (!baseUrl || !baseUrl.trim()) {
+  if (!oldUrl || !oldUrl.trim()) {
     return null
   }
-  return baseUrl.trim()
+  return oldUrl.trim()
 }
 
 // 拦截器：添加Session ID、API Key 和 Auth Token
@@ -254,12 +294,14 @@ axios.interceptors.request.use(config => {
   }
   
   const apiKey = getApiKey(apiType)
-  // 只有当API key存在且不为空时才设置header
-  // 如果为空，不设置header，让后端使用服务器配置的key
-  if (apiKey && apiKey.trim() && apiKey.trim() !== 'your_gemini_api_key_here' && apiKey.trim() !== 'your_doubao_api_key_here') {
-    config.headers['X-API-Key'] = apiKey.trim()
-    config.headers['X-API-Type'] = apiType
+  // 必须提供API key，不再使用服务器配置
+  if (!apiKey || !apiKey.trim() || apiKey.trim() === 'your_gemini_api_key_here' || apiKey.trim() === 'your_doubao_api_key_here') {
+    const apiName = apiType === 'gemini' ? 'Gemini' : '豆包'
+    ElMessage.error(`请先配置 ${apiName} API Key 才能使用`)
+    return Promise.reject(new Error(`${apiName} API Key 未配置`))
   }
+  config.headers['X-API-Key'] = apiKey.trim()
+  config.headers['X-API-Type'] = apiType
   
   // 添加 base_url（如果存在）
   const baseUrl = getBaseUrl(apiType)
@@ -345,6 +387,9 @@ export default {
     
     // API配置相关状态
     const showApiConfigDialog = ref(false)
+    const isFirstTime = ref(false)
+    const highlightApiType = ref(null)
+    const apiConfigVersion = ref(0) // 用于触发计算属性更新
     
     // 认证相关状态
     // 注意：已移除用户认证和积分体系，用户只需提供自己的 API Key 即可使用
@@ -368,12 +413,40 @@ export default {
     const activeTab = ref('generate') // 默认选中批量生图
     const selectedModel = ref('gemini-2.5-flash-image') // 默认模型
     
-    // 可用模型列表
-    const availableModels = ref([
-      { value: 'gemini-2.5-flash-image', label: 'gemini-2.5-flash-image' },
-      { value: 'gemini-3-pro-image-preview', label: 'gemini-3-pro-image-preview' },
-      { value: 'doubao-seedream-4-0-250828', label: 'doubao-seedream-4-0-250828' }
-    ])
+    // 所有模型列表（包含完整信息）
+    const allModelsList = [
+      { 
+        value: 'gemini-2.5-flash-image', 
+        label: 'Gemini 2.5 Flash Image',
+        apiType: 'gemini'
+      },
+      { 
+        value: 'gemini-3-pro-image-preview', 
+        label: 'Gemini 3 Pro Image Preview',
+        apiType: 'gemini'
+      },
+      { 
+        value: 'doubao-seedream-4-0-250828', 
+        label: '豆包 Seedream 4.0',
+        apiType: 'doubao'
+      }
+    ]
+    
+    // 可用模型列表（计算属性，根据已配置API动态过滤）
+    const availableModels = computed(() => {
+      // 依赖 apiConfigVersion 来触发更新
+      apiConfigVersion.value // 读取以建立依赖
+      return allModelsList.map(model => {
+        const configured = isApiConfigured(model.apiType)
+        return {
+          ...model,
+          disabled: !configured,
+          statusClass: configured ? 'status-configured' : 'status-not-configured',
+          statusIcon: configured ? Check : Warning,
+          statusText: configured ? '已配置' : '未配置'
+        }
+      })
+    })
 
     // 计算属性：开始按钮是否禁用
     const isStartButtonDisabled = computed(() => {
@@ -418,21 +491,15 @@ export default {
       ElMessage.success('已清空参考图')
     }
 
-    // 根据模型名称获取API类型
-    const getApiTypeFromModel = (modelName) => {
-      if (modelName && (modelName.includes('gemini') || modelName.startsWith('models/gemini'))) {
-        return 'gemini'
-      } else if (modelName && modelName.includes('doubao')) {
-        return 'doubao'
-      }
-      return 'gemini' // 默认
+    // 根据模型名称获取API类型（使用工具函数）
+    const getApiTypeFromModelName = (modelName) => {
+      return getApiTypeFromModel(modelName)
     }
     
     // 检查 API Key 是否已配置
     const checkApiKeyConfigured = () => {
-      const apiType = getApiTypeFromModel(selectedModel.value)
-      const apiKey = getApiKey(apiType)
-      return apiKey !== null
+      const apiType = getApiTypeFromModelName(selectedModel.value)
+      return isApiConfigured(apiType)
     }
     
     // 已移除积分相关代码
@@ -527,13 +594,54 @@ export default {
     // 处理API配置确认
     const handleApiConfigConfirmed = (config) => {
       // API key已保存到localStorage，无需额外处理
-      ElMessage.success('API Key 配置成功，可以开始使用了')
+      isFirstTime.value = false
+      highlightApiType.value = null
+      
+      // 触发计算属性更新
+      apiConfigVersion.value++
+      
+      // 等待一下让localStorage更新完成
+      setTimeout(() => {
+        // 检查当前选择的模型是否仍然可用
+        const apiType = getApiTypeFromModelName(selectedModel.value)
+        if (!isApiConfigured(apiType)) {
+          // 当前模型不可用，切换到第一个可用模型
+          const firstAvailable = availableModels.value.find(m => !m.disabled)
+          if (firstAvailable) {
+            selectedModel.value = firstAvailable.value
+            ElMessage.info(`已自动切换到 ${firstAvailable.label}`)
+          } else {
+            // 如果没有可用模型，提示用户
+            ElMessage.warning('请至少配置一个 API 才能使用')
+          }
+        }
+      }, 100)
     }
     
     // 处理模型切换
     const handleModelChange = (modelValue) => {
-      // 不再强制要求API key，可以使用服务器配置的
-      // 如果用户想使用自己的API key，可以点击配置按钮
+      const apiType = getApiTypeFromModelName(modelValue)
+      
+      // 检查对应API是否已配置
+      if (!isApiConfigured(apiType)) {
+        // 未配置，显示提示并打开配置对话框
+        ElMessage.warning(`请先配置 ${apiType === 'gemini' ? 'Gemini' : '豆包'} API`)
+        highlightApiType.value = apiType
+        
+        // 恢复之前的选择（在打开对话框之前）
+        const previousModel = allModelsList.find(m => {
+          const prevApiType = getApiTypeFromModelName(m.value)
+          return isApiConfigured(prevApiType) && m.value !== modelValue
+        })
+        if (previousModel) {
+          selectedModel.value = previousModel.value
+        }
+        
+        // 打开配置对话框
+        showApiConfigDialog.value = true
+      } else {
+        highlightApiType.value = null
+      }
     }
 
     // 生成所有变量组合的Prompt列表
@@ -672,7 +780,7 @@ export default {
           
           // 添加所有prompt（JSON格式）
           formData.append('prompts', JSON.stringify(limitedVariants))
-          formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+          formData.append('api_type', getApiTypeFromModelName(selectedModel.value))
           formData.append('model_name', selectedModel.value)
           
           const response = await axios.post('/api/batch/generate-with-prompts', formData, {
@@ -718,7 +826,7 @@ export default {
           // 添加提示词、数量和API类型
           formData.append('prompt', batchPrompt.value)
           formData.append('image_count', imageCount.value)
-          formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+          formData.append('api_type', getApiTypeFromModelName(selectedModel.value))
           formData.append('model_name', selectedModel.value)
           
           // 打印 FormData 内容（用于调试）
@@ -811,7 +919,7 @@ export default {
         
         // 添加提示词和API类型
         formData.append('prompt', batchPrompt.value)
-        formData.append('api_type', getApiTypeFromModel(selectedModel.value))
+        formData.append('api_type', getApiTypeFromModelName(selectedModel.value))
         formData.append('model_name', selectedModel.value)
         
         const response = await axios.post('/api/batch/generate', formData, {
@@ -843,10 +951,41 @@ export default {
       }
     }
 
-    // 组件挂载时加载用户信息
+    // 组件挂载时加载用户信息和检查首次使用
     onMounted(() => {
       // 已移除用户认证体系，无需加载用户信息
+      
+      // 执行数据迁移（如果存在旧格式数据）
+      migrateOldDataFormat()
+      
+      // 检查是否首次使用
+      const initialized = isApiConfigInitialized()
+      if (!initialized) {
+        // 首次使用，强制显示配置对话框
+        isFirstTime.value = true
+        showApiConfigDialog.value = true
+      } else {
+        // 检查是否有可用的模型
+        const available = availableModels.value.filter(m => !m.disabled)
+        if (available.length === 0) {
+          // 没有可用模型，提示配置
+          ElMessage.warning('请先配置至少一个 API 才能使用')
+          isFirstTime.value = true
+          showApiConfigDialog.value = true
+        } else {
+          // 检查当前选择的模型是否可用
+          const apiType = getApiTypeFromModelName(selectedModel.value)
+          if (!isApiConfigured(apiType)) {
+            // 当前模型不可用，切换到第一个可用模型
+            selectedModel.value = available[0].value
+          }
+        }
+      }
     })
+    
+    // 监听API配置变化，更新模型列表
+    // 注意：由于localStorage变化不会触发响应式更新，我们通过apiConfigVersion来触发
+    // 这个watch主要用于其他场景的配置变化检测
     
     return {
       taskManagerRef,
@@ -869,7 +1008,7 @@ export default {
       handleBatchEdit,
       clearAllImages,
       clearReferenceImage,
-      getApiTypeFromModel,
+      getApiTypeFromModel: getApiTypeFromModelName,
       getCreditsPerImage,
       // 变量相关
       detectedVariables,
@@ -884,7 +1023,9 @@ export default {
       showApiConfigDialog,
       handleApiConfigConfirmed,
       handleModelChange,
-      checkApiKeyConfigured
+      checkApiKeyConfigured,
+      isFirstTime,
+      highlightApiType
     }
   }
 }
@@ -1140,6 +1281,33 @@ html, body {
 .model-selector :deep(.el-input__inner) {
   font-size: 14px;
   color: #333333;
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.model-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  margin-left: 12px;
+}
+
+.model-status.status-configured {
+  color: #065f46;
+}
+
+.model-status.status-not-configured {
+  color: #92400e;
+}
+
+.model-status .el-icon {
+  font-size: 14px;
 }
 
 .prompt-input {
