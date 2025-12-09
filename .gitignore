@@ -73,3 +73,9 @@ test_*.py
 *_test.py
 debug_*.py
 temp_*.py
+
+# Deployment files with sensitive information
+Docs/DEPLOYMENT.md
+docker-compose.server.yml
+deploy.sh
+logs/

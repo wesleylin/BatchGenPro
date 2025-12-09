@@ -308,4 +308,4 @@ BatchGen Pro/
 
 ## 📄 许可证
 
-内部项目，仅供团队使用。
+本项目采用 [MIT License](../LICENSE) 许可证。
