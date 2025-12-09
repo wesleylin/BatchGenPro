@@ -39,63 +39,29 @@ BatchGen Pro 是一个基于 AI 的批量图片生成和修改工具，支持使
 
 **Gemini API**：
 1. 访问 [Google AI Studio](https://aistudio.google.com/)
-2. 登录 Google 账号
-3. 创建 API Key
-4. 复制 API Key
+2. 登录并申请key，需要绑定支付卡
 
 **豆包 API**：
 1. 访问 [豆包开放平台](https://console.volcengine.com/)
-2. 注册/登录账号
-3. 创建应用并获取 API Key
-4. 复制 API Key
+2. 登录并申请key
 
 #### 方式二：通过中转平台申请（推荐）
 
-推荐使用中转平台，通常价格更优惠且稳定：
+推荐使用中转平台，通常价格更优惠：
 
 **SpeeedAI**：
 1. 访问 [https://speeedai.com](https://speeedai.com)
 2. 注册账号并充值
 3. 获取 API Key 和 Base URL
 
+gemini的Base URL请填入  https://speeedai.com/v1beta/models/gemini-2.5-flash-image:generateContent
+
+豆包的Base URL请填入 https://speeedai.com/v1/images/generations
+
 **其他中转平台**：
 - 支持任何兼容 Gemini/豆包 API 格式的中转服务
 - 获取平台提供的 API Key 和 Base URL
 
-### 配置 API Key
-
-1. **打开设置**：点击页面右上角的设置按钮（⚙️）
-
-2. **选择模型**：选择要配置的 AI 模型（Gemini 或豆包）
-
-3. **填写 API Key**：
-   - 如果使用官方 API：直接填写 API Key，关闭"使用自定义端点/代理"开关
-   - 如果使用中转平台：填写 API Key，并开启"使用自定义端点/代理"开关
-
-4. **配置自定义端点**（仅中转平台需要）：
-   - **Base URL**：填写中转平台提供的 API 地址
-     - 例如：`https://api.speeedai.com/v1beta`
-     - 注意：不要包含路径末尾的斜杠 `/`
-   - **自定义模型名称**（可选）：如果平台使用非标准模型名称，可在此填写
-     - 留空则使用标准模型名称
-
-5. **保存配置**：点击"保存"按钮
-
-### 配置示例
-
-#### 使用官方 Gemini API
-```
-API Key: AIzaSy...
-使用自定义端点/代理: 关闭
-```
-
-#### 使用 SpeeedAI 中转平台
-```
-API Key: sk-...
-使用自定义端点/代理: 开启
-Base URL: https://api.speeedai.com/v1beta
-自定义模型名称: （留空或填写平台提供的模型名）
-```
 
 ### 安全说明
 
@@ -185,6 +151,9 @@ Base URL: https://api.speeedai.com/v1beta
 
 - **Gemini**：Gemini 2.5 Flash Image、Gemini 3 Pro Image Preview
 - **豆包**：豆包 Seedream 4.0
+- **ChatGPT**：规划中
+- **Midjourney**：规划中
+
 
 ## 📋 文件限制
 
