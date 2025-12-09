@@ -12,14 +12,19 @@ import os
 import sys
 from PIL import Image
 from google import genai
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.api_keys import (
-    GEMINI_MODEL, 
-    DOUBAO_MODEL, DOUBAO_WATERMARK,
-    RESULT_FOLDER
-)
+
+# 从环境变量读取配置
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-image')
+DOUBAO_MODEL = os.getenv('DOUBAO_MODEL', 'doubao-seedream-4-0-250828')
+DOUBAO_WATERMARK = os.getenv('DOUBAO_WATERMARK', 'false').lower() == 'true'
+RESULT_FOLDER = os.getenv('RESULT_FOLDER', 'results')
 
 class AIImageGenerator:
     """统一的AI图片生成器"""

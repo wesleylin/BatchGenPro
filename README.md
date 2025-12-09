@@ -152,6 +152,20 @@ BatchGen Pro 是一个基于 AI 的批量图片生成和修改工具，支持使
 
 ## 🔧 配置说明
 
+### 环境变量配置
+项目使用环境变量进行配置，复制 `env.example` 为 `.env` 并修改相应配置：
+
+```bash
+cp env.example .env
+```
+
+主要配置项：
+- **AI模型配置**：`GEMINI_MODEL`、`DOUBAO_MODEL`、`DOUBAO_WATERMARK`
+- **文件存储**：`UPLOAD_FOLDER`、`RESULT_FOLDER`、`MAX_FILE_SIZE`
+- **文件类型**：`ALLOWED_EXTENSIONS`（逗号分隔）
+- **API选择**：`DEFAULT_API`、`SUPPORTED_APIS`（逗号分隔）
+- **Redis配置**：`REDIS_PASSWORD`
+
 ### API 密钥配置
 用户需要在前端界面中配置自己的 API Key：
 - 点击右上角的设置按钮
@@ -163,8 +177,8 @@ BatchGen Pro 是一个基于 AI 的批量图片生成和修改工具，支持使
 - `doubao`：豆包图像生成 API
 
 ### 文件大小限制
-- 最大文件大小：10MB
-- 支持格式：jpg, jpeg, png, gif, webp
+- 最大文件大小：10MB（可通过 `MAX_FILE_SIZE` 环境变量配置）
+- 支持格式：jpg, jpeg, png, gif, webp（可通过 `ALLOWED_EXTENSIONS` 环境变量配置）
 
 ## 📂 项目结构
 
@@ -181,8 +195,6 @@ BatchGen Pro/
 │   │   ├── App.vue         # 主应用组件
 │   │   └── components/     # 组件目录
 │   └── package.json
-├── config/                 # 配置文件
-│   └── api_keys.py.example # API 配置模板
 ├── docker/                 # Docker 构建文件
 │   ├── Dockerfile.backend  # 后端镜像
 │   ├── Dockerfile.frontend # 前端镜像

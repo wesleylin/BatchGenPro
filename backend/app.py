@@ -8,11 +8,22 @@ import redis
 from google import genai
 from PIL import Image
 import io
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.api_keys import GEMINI_MODEL, UPLOAD_FOLDER, RESULT_FOLDER, SUPPORTED_APIS, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from ai_image_generator import create_image_generator
+
+# 从环境变量读取配置
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-image')
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
+RESULT_FOLDER = os.getenv('RESULT_FOLDER', 'results')
+MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', 10 * 1024 * 1024))  # 默认10MB
+ALLOWED_EXTENSIONS = set(os.getenv('ALLOWED_EXTENSIONS', 'png,jpg,jpeg,gif,webp').split(','))
+SUPPORTED_APIS = os.getenv('SUPPORTED_APIS', 'gemini,doubao').split(',')
 
 # V2阶段：导入批量任务相关模块
 from task_manager import task_manager, TaskStatus

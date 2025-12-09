@@ -7,10 +7,17 @@ from PIL import Image
 import io
 import uuid
 import time
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.api_keys import GEMINI_MODEL, RESULT_FOLDER
+
+# 从环境变量读取配置
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-image')
+RESULT_FOLDER = os.getenv('RESULT_FOLDER', 'results')
 
 @celery_app.task(bind=True)
 def generate_single_image(self, file_data, filename, prompt, task_id):
