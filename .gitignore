@@ -75,7 +75,9 @@ debug_*.py
 temp_*.py
 
 # Deployment files with sensitive information
+DEPLOYMENT.md
 Docs/DEPLOYMENT.md
+nginx-batchgenpro.conf.example
 docker-compose.server.yml
 deploy.sh
 logs/
